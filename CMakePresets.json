@@ -1,0 +1,55 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug (CUDA, Orin)",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_CUDA": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release (CUDA, Orin)",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_CUDA": "ON"
+      }
+    },
+    {
+      "name": "release-profile",
+      "displayName": "Release + profiling line info (CUDA, Orin)",
+      "binaryDir": "${sourceDir}/build/release-profile",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "ENABLE_CUDA": "ON",
+        "CMAKE_CUDA_FLAGS": "-lineinfo"
+      }
+    },
+    {
+      "name": "cpu",
+      "displayName": "CPU-only (no CUDA toolchain required)",
+      "binaryDir": "${sourceDir}/build/cpu",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_CUDA": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "release-profile", "configurePreset": "release-profile" },
+    { "name": "cpu", "configurePreset": "cpu" }
+  ],
+  "testPresets": [
+    { "name": "debug", "configurePreset": "debug", "output": { "outputOnFailure": true } },
+    { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
+    { "name": "release-profile", "configurePreset": "release-profile", "output": { "outputOnFailure": true } },
+    { "name": "cpu", "configurePreset": "cpu", "output": { "outputOnFailure": true } }
+  ]
+}
