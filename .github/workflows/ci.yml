@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure (CPU-only)
+        run: cmake --preset cpu
+
+      - name: Build
+        run: cmake --build --preset cpu
+
+      - name: Test
+        run: ctest --preset cpu --output-on-failure
+
+  format-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: clang-format check
+        run: |
+          find include src tests -regex '.*\.\(cpp\|hpp\|cuh\|cu\)' \
+            -exec clang-format --dry-run --Werror {} +
