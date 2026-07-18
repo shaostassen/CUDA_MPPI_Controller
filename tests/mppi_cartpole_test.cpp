@@ -6,46 +6,21 @@
 #include <cmath>
 #include <vector>
 
-#include "mppi/controller.hpp"
-#include "mppi/dynamics/cartpole.hpp"
+#include "cartpole_task.hpp"
 #include "mppi/integrators.hpp"
 
 namespace {
 
 using mppi::dynamics::CartPole;
 
-// Hyperparameters below were selected empirically (grid over lambda, sigma,
-// w_x; 20 seeds, then the finalists on the full 100-seed AC set): this
-// config scored 100/100 locally, sigma=6 scored 96/100. Assertion bar stays
-// at the AC's 95 so platform libm differences can't flake the test.
-struct SwingUpCost {
-  float running(const CartPole<float>::State& s, int) const {
-    float e[4] = {s.x, s.x_dot, s.theta, s.theta_dot};
-    float w[4] = {3.0f, 0.2f, 10.0f, 0.2f};
-    return mppi::costs::quadratic(e, w);
-  }
-  float terminal(const CartPole<float>::State& s) const {
-    float e[4] = {s.x, s.x_dot, s.theta, s.theta_dot};
-    float w[4] = {15.0f, 1.0f, 100.0f, 2.0f};
-    return mppi::costs::quadratic(e, w);
-  }
-};
+// Task definition and tuned hyperparameters live in examples/
+// cartpole_task.hpp (provenance documented there). Assertion bar stays at
+// the AC's 95 (observed 100/100 locally) so platform libm differences
+// can't flake the test.
+using SwingUpCost = cartpole_task::SwingUpCost;
+using SwingUpController = cartpole_task::Controller;
 
-using SwingUpController = mppi::Controller<CartPole<float>, SwingUpCost>;
-
-SwingUpController::Config test_config(unsigned seed) {
-  SwingUpController::Config cfg;
-  cfg.samples = 512;  // K per the S1.4 AC
-  cfg.horizon = 50;   // T per the S1.4 AC
-  cfg.dt = 0.02f;
-  cfg.lambda = 2.0f;
-  cfg.alpha = 0.0f;
-  cfg.sigma = {3.0f};
-  cfg.u_min = {-15.0f};
-  cfg.u_max = {15.0f};
-  cfg.seed = seed;
-  return cfg;
-}
+SwingUpController::Config test_config(unsigned seed) { return cartpole_task::config(seed); }
 
 // Closed loop: MPPI plans with Euler rollouts (PLAN.md §1 decision 5), the
 // environment integrates the same model with RK4. Success per the AC:

@@ -39,4 +39,5 @@ if(ENABLE_CUDA)
   add_subdirectory(src/cuda)
 endif()
 
+add_subdirectory(examples)
 add_subdirectory(tests)

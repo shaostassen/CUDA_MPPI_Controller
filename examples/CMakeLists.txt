@@ -1,0 +1,3 @@
+add_executable(lqr_cross_check lqr_cross_check.cpp)
+target_link_libraries(lqr_cross_check PRIVATE mppi_core)
+target_include_directories(lqr_cross_check PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
