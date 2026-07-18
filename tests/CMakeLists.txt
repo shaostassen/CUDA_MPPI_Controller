@@ -1,6 +1,6 @@
 include(GoogleTest)
 
-add_executable(mppi_tests toolchain_smoke_test.cpp)
+add_executable(mppi_tests toolchain_smoke_test.cpp dynamics_test.cpp)
 target_link_libraries(mppi_tests PRIVATE mppi_core GTest::gtest_main)
 
 if(ENABLE_CUDA)
