@@ -7,11 +7,28 @@
 #include <vector>
 
 #include "mppi/costs/quadratic.hpp"
+#include "mppi/execution.hpp"
 #include "mppi/integrators.hpp"
 #include "mppi/philox.hpp"
 #include "mppi/weights.hpp"
 
 namespace mppi {
+
+// Standalone (not nested) so controllers that differ only in execution
+// policy share one Config type — a nested Config would make the Serial and
+// OpenMp instantiations mutually unconvertible for no reason.
+template <typename Scalar, int M>
+struct ControllerConfig {
+  int samples = 512;              // K
+  int horizon = 50;               // T
+  Scalar dt = Scalar(0.02);
+  Scalar lambda = Scalar(1);
+  Scalar alpha = Scalar(0);       // gamma = lambda * (1 - alpha)
+  std::array<Scalar, M> sigma{};  // sampling std dev per dim; must be > 0
+  std::array<Scalar, M> u_min{};
+  std::array<Scalar, M> u_max{};
+  std::uint32_t seed = 0;
+};
 
 // Single-thread CPU reference of information-theoretic MPPI (PLAN.md §1
 // decisions 5-6): Euler rollouts, gamma-coupled running cost, baseline-
@@ -22,7 +39,10 @@ namespace mppi {
 // Cost must provide running(state, t) and terminal(state). Dynamics is any
 // model exposing State/ScalarType/derivative. M is the control dimension
 // (one Philox block = 4 words covers M <= 4 noise draws per (k, t)).
-template <typename Dynamics, typename Cost, int M = 1>
+// Exec parallelizes the rollout and update loops (see execution.hpp); the
+// structure keeps parallel results bit-identical to serial, so S1.6's
+// 1e-4-rel parity AC holds with margin to spare.
+template <typename Dynamics, typename Cost, int M = 1, typename Exec = exec::Serial>
 class Controller {
   static_assert(M >= 1 && M <= 4, "one Philox block per (k,t) covers at most 4 control dims");
 
@@ -30,17 +50,7 @@ class Controller {
   using Scalar = typename Dynamics::ScalarType;
   using State = typename Dynamics::State;
 
-  struct Config {
-    int samples = 512;              // K
-    int horizon = 50;               // T
-    Scalar dt = Scalar(0.02);
-    Scalar lambda = Scalar(1);
-    Scalar alpha = Scalar(0);       // gamma = lambda * (1 - alpha)
-    std::array<Scalar, M> sigma{};  // sampling std dev per dim; must be > 0
-    std::array<Scalar, M> u_min{};
-    std::array<Scalar, M> u_max{};
-    std::uint32_t seed = 0;
-  };
+  using Config = ControllerConfig<Scalar, M>;
 
   Controller(Dynamics dynamics, Cost cost, Config config)
       : dyn_(dynamics),
@@ -59,7 +69,7 @@ class Controller {
     const int K = cfg_.samples;
     const int T = cfg_.horizon;
 
-    for (int k = 0; k < K; ++k) {
+    Exec::for_range(K, [&](int k) {
       State x = x0;
       Scalar s_cost = Scalar(0);
       for (int t = 0; t < T; ++t) {
@@ -90,11 +100,16 @@ class Controller {
       }
       s_cost += cost_.terminal(x);
       costs_[k] = s_cost;
-    }
+    });
 
+    // Serial on purpose: O(K) and it keeps the weight normalization order
+    // identical regardless of thread count.
     Scalar beta = weights::softmax_weights(costs_.data(), K, cfg_.lambda, weights_.data());
 
-    for (int t = 0; t < T; ++t) {
+    // Parallel over t: each (t, i) sum over k runs serially inside one
+    // thread, so summation order — and therefore the result — never depends
+    // on the thread count.
+    Exec::for_range(T, [&](int t) {
       for (int i = 0; i < M; ++i) {
         Scalar du = Scalar(0);
         for (int k = 0; k < K; ++k) {
@@ -103,7 +118,7 @@ class Controller {
         std::size_t idx = static_cast<std::size_t>(t) * M + i;
         u_[idx] = std::clamp(u_[idx] + du, cfg_.u_min[i], cfg_.u_max[i]);
       }
-    }
+    });
 
     for (int i = 0; i < M; ++i) {
       u_out[i] = u_[i];

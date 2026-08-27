@@ -19,6 +19,10 @@ if(ENABLE_CUDA)
   set(CMAKE_CUDA_ARCHITECTURES "87-real;87-virtual")
 endif()
 
+# Optional: enables the S1.6 OpenMP execution policy, tests, and bench.
+# On macOS: brew install libomp, configure with -DOpenMP_ROOT=$(brew --prefix libomp).
+find_package(OpenMP COMPONENTS CXX)
+
 include(FetchContent)
 FetchContent_Declare(
   googletest
