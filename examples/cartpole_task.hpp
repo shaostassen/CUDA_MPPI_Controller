@@ -22,13 +22,16 @@ inline constexpr float kSigma = 3.0f;
 inline constexpr float kForceLimit = 15.0f;
 inline constexpr float kDt = 0.02f;
 
+// Annotated for device so the CUDA kernels (E2) run the identical cost
+// function the CPU reference does — a separate device copy would be one
+// more place for CPU/GPU parity to quietly break.
 struct SwingUpCost {
-  float running(const State& s, int) const {
+  MPPI_HOST_DEVICE float running(const State& s, int) const {
     float e[4] = {s.x, s.x_dot, s.theta, s.theta_dot};
     float w[4] = {kRunWeights[0], kRunWeights[1], kRunWeights[2], kRunWeights[3]};
     return mppi::costs::quadratic(e, w);
   }
-  float terminal(const State& s) const {
+  MPPI_HOST_DEVICE float terminal(const State& s) const {
     float e[4] = {s.x, s.x_dot, s.theta, s.theta_dot};
     float w[4] = {kTermWeights[0], kTermWeights[1], kTermWeights[2], kTermWeights[3]};
     return mppi::costs::quadratic(e, w);

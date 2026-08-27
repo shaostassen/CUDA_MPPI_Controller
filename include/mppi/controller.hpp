@@ -10,6 +10,7 @@
 #include "mppi/execution.hpp"
 #include "mppi/integrators.hpp"
 #include "mppi/philox.hpp"
+#include "mppi/rollout.hpp"
 #include "mppi/weights.hpp"
 
 namespace mppi {
@@ -69,26 +70,10 @@ class Controller {
     const int K = cfg_.samples;
     const int T = cfg_.horizon;
 
+    const auto params = rollout_params();
     Exec::for_range(K, [&](int k) {
-      State x = x0;
-      Scalar s_cost = Scalar(0);
-      for (int t = 0; t < T; ++t) {
-        Scalar u_pert[M];
-        Scalar* eps = noise_slot(k, t);
-        const Scalar* u_nom = &u_[static_cast<std::size_t>(t) * M];
-        sample_control(k, t, iteration_, u_nom, u_pert, eps);
-        for (int i = 0; i < M; ++i) {
-          s_cost += costs::control_coupling(gamma, u_nom[i], eps[i], cfg_.sigma[i] * cfg_.sigma[i]);
-        }
-        if constexpr (M == 1) {
-          x = integrators::euler_step(dyn_, x, u_pert[0], cfg_.dt);
-        } else {
-          x = integrators::euler_step(dyn_, x, u_pert, cfg_.dt);
-        }
-        s_cost += cost_.running(x, t);
-      }
-      s_cost += cost_.terminal(x);
-      costs_[k] = s_cost;
+      costs_[k] = rollout_and_cost<Dynamics, Cost, M>(dyn_, cost_, x0, u_.data(), params, k,
+                                                      noise_.data());
     });
 
     // Serial on purpose: O(K) and it keeps the weight normalization order
@@ -152,10 +137,14 @@ class Controller {
     trace.eps.resize(static_cast<std::size_t>(cfg_.horizon) * M);
     trace.states.push_back(x0);
 
+    auto params = rollout_params();
+    params.iteration = iteration;
+
     State x = x0;
     for (int t = 0; t < cfg_.horizon; ++t) {
       std::size_t off = static_cast<std::size_t>(t) * M;
-      sample_control(k, t, iteration, &u_snapshot[off], &trace.controls[off], &trace.eps[off]);
+      mppi::sample_control<Scalar, M>(params, k, t, &u_snapshot[off], &trace.controls[off],
+                                      &trace.eps[off]);
       if constexpr (M == 1) {
         x = integrators::euler_step(dyn_, x, trace.controls[off], cfg_.dt);
       } else {
@@ -170,26 +159,27 @@ class Controller {
     return trace;
   }
 
- private:
-  // Draws rollout k's control at timestep t from the Philox counter
-  // (seed, iteration, k, t), clamps to the actuator limits, and reports the
-  // post-clamp effective noise: what the rollout actually applied is also
-  // what the update must average, or clamped samples would pull the nominal
-  // toward controls nobody simulated.
-  void sample_control(int k, int t, std::uint32_t iteration, const Scalar* u_nom, Scalar* u_pert,
-                      Scalar* eps) const {
-    auto block = rng::Philox4x32_10::block(cfg_.seed, iteration, static_cast<std::uint32_t>(k),
-                                           static_cast<std::uint32_t>(t));
-    float z[4];
-    rng::normal_pair(block.w[0], block.w[1], z[0], z[1]);
-    rng::normal_pair(block.w[2], block.w[3], z[2], z[3]);
+  // Packs the config into the POD the shared rollout core consumes. The CPU
+  // reference stores noise rollout-major ([K][T][M]); the CUDA path swaps in
+  // the time-major layout for coalescing (PLAN.md §1 decision 9). Public so
+  // the CUDA backend can build launch parameters from the same config.
+  RolloutParams<Scalar, M> rollout_params() const {
+    RolloutParams<Scalar, M> p{};
+    p.horizon = cfg_.horizon;
+    p.dt = cfg_.dt;
+    p.gamma = costs::coupling_gamma(cfg_.lambda, cfg_.alpha);
     for (int i = 0; i < M; ++i) {
-      Scalar raw = u_nom[i] + cfg_.sigma[i] * static_cast<Scalar>(z[i]);
-      u_pert[i] = std::clamp(raw, cfg_.u_min[i], cfg_.u_max[i]);
-      eps[i] = u_pert[i] - u_nom[i];
+      p.sigma[i] = cfg_.sigma[i];
+      p.u_min[i] = cfg_.u_min[i];
+      p.u_max[i] = cfg_.u_max[i];
     }
+    p.seed = cfg_.seed;
+    p.iteration = iteration_;
+    p.layout = layout_rollout_major(cfg_.horizon, M);
+    return p;
   }
 
+ private:
   Scalar* noise_slot(int k, int t) {
     return noise_.data() + (static_cast<std::size_t>(k) * cfg_.horizon + t) * M;
   }
