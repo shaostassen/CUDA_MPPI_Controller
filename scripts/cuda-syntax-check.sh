@@ -28,7 +28,7 @@ GTEST_INC="$ROOT/build/cpu/_deps/googletest-src/googletest/include"
 GTEST_FLAG=""
 [ -d "$GTEST_INC" ] && GTEST_FLAG="-I$GTEST_INC"
 
-FILES=$(find "$ROOT/src" "$ROOT/tests" -name '*.cu' 2>/dev/null | sort)
+FILES=$(find "$ROOT/src" "$ROOT/tests" "$ROOT/examples" -name '*.cu' 2>/dev/null | sort)
 if [ -z "$FILES" ]; then
   echo "no .cu sources found"
   exit 0

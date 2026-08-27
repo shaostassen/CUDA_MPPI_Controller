@@ -66,11 +66,15 @@ ever involved.
 | Shared rollout core | CPU tests; reproduces controller costs bit-exactly |
 | Noise layout equivalence (3 layouts) | CPU test, bit-exact |
 | Sgemv call formulation | CPU test emulating the exact cuBLAS call |
+| Reduction work partitioning (S2.4) | CPU test; every index covered exactly once |
+| Regenerated == stored noise (S2.5) | CPU test, bit-exact over 25.6k elements |
 | Device buffers (S2.1) | syntax-checked only |
 | Rollout kernel v1 (S2.2) | syntax-checked only |
 | Reduction path v1 (S2.3) | syntax-checked only |
+| Warp-shuffle reductions (S2.4) | syntax-checked only |
 | CPU↔GPU cost parity | **pending Orin** (`tests/cuda_rollout_test.cu`) |
 | Full-iteration parity, GPU swing-up | **pending Orin** (`tests/cuda_iteration_test.cu`) |
+| v1 vs v2 timings, memory delta | **pending Orin** (`examples/cuda_reduction_bench.cu`) |
 
 Nothing in the CUDA column has ever run. The Orin is the only CUDA hardware
 for this project, so `scripts/gpu-test.sh` on that machine is what turns the
@@ -89,6 +93,48 @@ The update and the receding-horizon shift are fused into one kernel writing
 to a second buffer. Shifting in place would race (thread `t` reading `u[t+1]`
 while `t+1` writes it); double-buffering makes it race-free and saves a
 launch.
+
+## Two variants that exist to be measured (S2.4, S2.5)
+
+`GpuController` carries both reduction implementations and both noise modes,
+selectable at runtime:
+
+| | |
+|---|---|
+| `ReductionPath::Library` | CUB `DeviceReduce` + cuBLAS `Sgemv` (v1, default) |
+| `ReductionPath::HandRolled` | warp-shuffle block reductions + custom weighted sum (v2) |
+| `NoiseMode::Stored` | epsilon kept in global memory (`K*T*M` floats) |
+| `NoiseMode::Regenerated` | epsilon recomputed from its Philox counter in the update |
+
+Regenerating implies the hand-rolled path — cuBLAS needs a materialized
+matrix, and the entire point is not to materialize one. `set_noise_mode()`
+enforces that rather than letting the combination fail confusingly.
+
+Neither variant has a defensible default yet, because on this hardware the
+answer is not obvious in either direction: the Orin's CPU and GPU share one
+memory controller, so trading `K*T*M` floats of traffic for a Philox block
+per `(k, t)` could go either way. `examples/cuda_reduction_bench.cu` sweeps
+K ∈ {1k, 4k, 16k, 64k} across all three combinations and emits the CSV that
+settles it. Until that runs, v1 + stored remains the default because it is
+the one the plan specified, not because it measured faster.
+
+What *is* settled without hardware:
+
+- The work partitioning is a proper cover. One block per output element with
+  threads striding over k, and the grid-stride loop in the first reduction
+  stage, both address every index exactly once — including the ragged cases
+  where the count is not a multiple of the block size
+  (`tests/partition_test.cpp`).
+- Regenerated epsilon equals stored epsilon exactly. Storing wrote whatever
+  `sample_control()` returned, so regenerating reproduces it bit-for-bit;
+  `tests/noise_source_test.cpp` checks 25,600 elements and the resulting
+  weighted sums. The device run inherits this for the same reason — both
+  paths call the same code on the same hardware, so whatever its `sinf`
+  does, it does identically for both.
+
+That leaves the GPU tests to answer the questions a GPU is actually needed
+for: does the shuffle tree agree with CUB and cuBLAS to 1e-4, and which is
+faster.
 
 ## Iterating on kernels without a GPU
 

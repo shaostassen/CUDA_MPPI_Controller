@@ -16,9 +16,28 @@
 #include "mppi/cuda/check.cuh"
 #include "mppi/cuda/device_buffers.cuh"
 #include "mppi/cuda/reduce.cuh"
+#include "mppi/cuda/reduce_v2.cuh"
 #include "mppi/cuda/rollout.cuh"
+#include "mppi/noise_source.hpp"
 
 namespace mppi::cuda {
+
+// Which reduction implementation an iteration uses. Both ship: PLAN.md S2.4
+// makes the faster one the default once measured on the Orin, and keeps the
+// loser for the writeup.
+enum class ReductionPath {
+  Library,     // v1: CUB DeviceReduce + cuBLAS Sgemv
+  HandRolled,  // v2: warp-shuffle reductions + custom weighted sum
+};
+
+// Whether epsilon is kept in global memory or recomputed from its Philox
+// counter during the update (PLAN.md S2.5). Regenerating saves K*T*M floats
+// and costs one Philox block per (k, t) — a memory-for-compute trade whose
+// sign is a hardware question, especially on a bandwidth-limited Orin.
+enum class NoiseMode {
+  Stored,
+  Regenerated,
+};
 
 #define CUBLAS_CHECK(expr)                                                       \
   do {                                                                           \
@@ -64,7 +83,8 @@ class GpuController {
         d_weights_(config.samples),
         d_beta_(1),
         d_z_(1),
-        d_emit_(M) {
+        d_emit_(M),
+        d_partials_(kMaxPartials) {
     d_u_.zero();
     d_u_next_.zero();
 
@@ -98,29 +118,26 @@ class GpuController {
     const int T = cfg_.horizon;
     const auto params = rollout_params();
 
-    launch_rollout_cost<Dynamics, Cost, M>(dyn_, cost_, x0, d_u_.data(), params, K,
-                                           d_noise_.data(), d_costs_.data(), block_size_);
+    if (noise_mode_ == NoiseMode::Stored) {
+      launch_rollout_cost<Dynamics, Cost, M, true>(dyn_, cost_, x0, d_u_.data(), params, K,
+                                                   d_noise_.data(), d_costs_.data(), block_size_);
+    } else {
+      // Nothing to write: epsilon gets recomputed during the update.
+      launch_rollout_cost<Dynamics, Cost, M, false>(dyn_, cost_, x0, d_u_.data(), params, K,
+                                                    nullptr, d_costs_.data(), block_size_);
+    }
 
-    CUDA_CHECK(::cub::DeviceReduce::Min(d_temp_.data(), temp_bytes_, d_costs_.data(),
-                                        d_beta_.data(), K));
-
+    reduce_beta(K);
     exp_weights_kernel<Scalar><<<grid_for(K, block_size_), block_size_>>>(
         d_costs_.data(), d_beta_.data(), cfg_.lambda, K, d_weights_.data());
     CUDA_CHECK(cudaGetLastError());
-
-    CUDA_CHECK(::cub::DeviceReduce::Sum(d_temp_.data(), temp_bytes_, d_weights_.data(),
-                                        d_z_.data(), K));
+    reduce_normalizer(K);
 
     normalize_kernel<Scalar>
         <<<grid_for(K, block_size_), block_size_>>>(d_weights_.data(), d_z_.data(), K);
     CUDA_CHECK(cudaGetLastError());
 
-    // du = A^T w, with the noise buffer read as a column-major K x (T*M)
-    // matrix (leading dimension K). That view is only valid for the gemv
-    // layout, which rollout_params() pins.
-    const Scalar one = Scalar(1), zero = Scalar(0);
-    CUBLAS_CHECK(cublasSgemv(blas_, CUBLAS_OP_T, K, T * M, &one, d_noise_.data(), K,
-                             d_weights_.data(), 1, &zero, d_du_.data(), 1));
+    weighted_sum(params, K, T);
 
     update_shift_kernel<Scalar, M><<<grid_for(T, block_size_), block_size_>>>(
         d_u_.data(), d_du_.data(), params, d_u_next_.data(), d_emit_.data());
@@ -128,6 +145,25 @@ class GpuController {
 
     std::swap(d_u_, d_u_next_);
     ++iteration_;
+  }
+
+  void set_reduction_path(ReductionPath p) { reduction_path_ = p; }
+  ReductionPath reduction_path() const { return reduction_path_; }
+
+  // Regenerating requires the hand-rolled weighted sum: cuBLAS needs a
+  // materialized matrix, and the whole point is not to materialize one.
+  void set_noise_mode(NoiseMode m) {
+    noise_mode_ = m;
+    if (m == NoiseMode::Regenerated) {
+      reduction_path_ = ReductionPath::HandRolled;
+    }
+  }
+  NoiseMode noise_mode() const { return noise_mode_; }
+
+  // Device bytes held for noise — zero in regenerated mode. This is the
+  // memory saving S2.5 asks to record.
+  std::size_t noise_bytes() const {
+    return noise_mode_ == NoiseMode::Stored ? d_noise_.size() * sizeof(Scalar) : 0;
   }
 
   // Closed-loop convenience: one iteration, then bring back the M floats the
@@ -186,14 +222,77 @@ class GpuController {
   }
 
  private:
+  static constexpr int kReduceBlock = 256;
+  static constexpr int kMaxPartials = 1024;
+
+  // beta = min_k S_k.
+  void reduce_beta(int K) {
+    if (reduction_path_ == ReductionPath::Library) {
+      CUDA_CHECK(::cub::DeviceReduce::Min(d_temp_.data(), temp_bytes_, d_costs_.data(),
+                                          d_beta_.data(), K));
+      return;
+    }
+    int grid = std::min(kMaxPartials, grid_for(K, kReduceBlock));
+    reduce_partials_kernel<Scalar, kReduceBlock, MinOp>
+        <<<grid, kReduceBlock>>>(d_costs_.data(), K, d_partials_.data(), MinOp{});
+    CUDA_CHECK(cudaGetLastError());
+    reduce_final_kernel<Scalar, kReduceBlock, MinOp>
+        <<<1, kReduceBlock>>>(d_partials_.data(), grid, d_beta_.data(), MinOp{});
+    CUDA_CHECK(cudaGetLastError());
+  }
+
+  // Z = sum_k exp(-(S_k - beta)/lambda).
+  void reduce_normalizer(int K) {
+    if (reduction_path_ == ReductionPath::Library) {
+      CUDA_CHECK(::cub::DeviceReduce::Sum(d_temp_.data(), temp_bytes_, d_weights_.data(),
+                                          d_z_.data(), K));
+      return;
+    }
+    int grid = std::min(kMaxPartials, grid_for(K, kReduceBlock));
+    reduce_partials_kernel<Scalar, kReduceBlock, SumOp>
+        <<<grid, kReduceBlock>>>(d_weights_.data(), K, d_partials_.data(), SumOp{});
+    CUDA_CHECK(cudaGetLastError());
+    reduce_final_kernel<Scalar, kReduceBlock, SumOp>
+        <<<1, kReduceBlock>>>(d_partials_.data(), grid, d_z_.data(), SumOp{});
+    CUDA_CHECK(cudaGetLastError());
+  }
+
+  // du[t][i] = sum_k w[k] * eps(k, t, i).
+  void weighted_sum(const RolloutParams<Scalar, M>& params, int K, int T) {
+    if (reduction_path_ == ReductionPath::Library) {
+      // The noise buffer read as a column-major K x (T*M) matrix with
+      // leading dimension K — a view that is only valid for the gemv layout,
+      // which rollout_params() pins.
+      const Scalar one = Scalar(1), zero = Scalar(0);
+      CUBLAS_CHECK(cublasSgemv(blas_, CUBLAS_OP_T, K, T * M, &one, d_noise_.data(), K,
+                               d_weights_.data(), 1, &zero, d_du_.data(), 1));
+      return;
+    }
+    // d_u_ still holds the nominal sequence the rollouts perturbed —
+    // update_shift_kernel writes to the other buffer — so regeneration sees
+    // exactly the controls the rollout used.
+    if (noise_mode_ == NoiseMode::Stored) {
+      StoredNoise<Scalar, M> src{d_noise_.data(), params.layout};
+      weighted_sum_kernel<Scalar, M, kReduceBlock, StoredNoise<Scalar, M>>
+          <<<T * M, kReduceBlock>>>(src, d_u_.data(), d_weights_.data(), K, T, d_du_.data());
+    } else {
+      RegeneratedNoise<Scalar, M> src{params};
+      weighted_sum_kernel<Scalar, M, kReduceBlock, RegeneratedNoise<Scalar, M>>
+          <<<T * M, kReduceBlock>>>(src, d_u_.data(), d_weights_.data(), K, T, d_du_.data());
+    }
+    CUDA_CHECK(cudaGetLastError());
+  }
+
   Dynamics dyn_;
   Cost cost_;
   Config cfg_;
   std::uint32_t iteration_ = 0;
   int block_size_ = 256;
+  ReductionPath reduction_path_ = ReductionPath::Library;
+  NoiseMode noise_mode_ = NoiseMode::Stored;
 
   DeviceBuffer<Scalar> d_u_, d_u_next_, d_du_, d_noise_, d_costs_, d_weights_, d_beta_, d_z_,
-      d_emit_;
+      d_emit_, d_partials_;
   DeviceBuffer<unsigned char> d_temp_;
   std::size_t temp_bytes_ = 0;
   cublasHandle_t blas_ = nullptr;

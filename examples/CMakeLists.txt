@@ -6,6 +6,12 @@ add_executable(cartpole_replay cartpole_replay.cpp)
 target_link_libraries(cartpole_replay PRIVATE mppi_core)
 target_include_directories(cartpole_replay PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+if(ENABLE_CUDA)
+  add_executable(cuda_reduction_bench cuda_reduction_bench.cu)
+  target_link_libraries(cuda_reduction_bench PRIVATE mppi_core mppi_cuda)
+  target_include_directories(cuda_reduction_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+endif()
+
 if(OpenMP_CXX_FOUND)
   add_executable(omp_bench omp_bench.cpp)
   target_link_libraries(omp_bench PRIVATE mppi_core OpenMP::OpenMP_CXX)

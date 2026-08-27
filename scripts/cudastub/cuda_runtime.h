@@ -18,6 +18,17 @@ struct __mppi_uint3 {
   unsigned x, y, z;
 };
 __attribute__((device)) extern __mppi_uint3 threadIdx, blockIdx, blockDim, gridDim;
+__attribute__((device)) extern const int warpSize;
+
+// Device intrinsics the project uses. Real CUDA supplies these through its
+// device-function headers.
+__attribute__((device)) void __syncthreads();
+__attribute__((device)) float __shfl_down_sync(unsigned mask, float var, unsigned delta,
+                                               int width = 32);
+__attribute__((device)) double __shfl_down_sync(unsigned mask, double var, unsigned delta,
+                                                int width = 32);
+__attribute__((device)) int __shfl_down_sync(unsigned mask, int var, unsigned delta,
+                                             int width = 32);
 
 // Device overloads of the math functions the project uses. nvcc supplies
 // these via its own math headers; with -nocudainc clang sees only the host
@@ -50,6 +61,7 @@ using ::sqrt;
 
 typedef enum cudaError { cudaSuccess = 0, cudaErrorUnknown = 999 } cudaError_t;
 typedef struct CUstream_st* cudaStream_t;
+typedef struct CUevent_st* cudaEvent_t;
 
 enum cudaMemcpyKind {
   cudaMemcpyHostToHost = 0,
@@ -86,6 +98,11 @@ cudaError_t cudaHostGetDevicePointer(void** pDevice, void* pHost, unsigned int f
 cudaError_t cudaFreeHost(void* ptr);
 cudaError_t cudaGetLastError(void);
 cudaError_t cudaDeviceSynchronize(void);
+cudaError_t cudaEventCreate(cudaEvent_t* event);
+cudaError_t cudaEventDestroy(cudaEvent_t event);
+cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0);
+cudaError_t cudaEventSynchronize(cudaEvent_t event);
+cudaError_t cudaEventElapsedTime(float* ms, cudaEvent_t start, cudaEvent_t end);
 const char* cudaGetErrorString(cudaError_t error);
 }
 

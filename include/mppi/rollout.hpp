@@ -98,7 +98,12 @@ MPPI_HOST_DEVICE void sample_control(const RolloutParams<Scalar, M>& p, int k, i
 // and the CUDA kernel (src/cuda/rollout.cu) both call it, so they cannot
 // disagree about the algorithm — only about floating-point evaluation of
 // the transcendentals inside, which is what the 1e-4 parity AC covers.
-template <typename Dynamics, typename Cost, int M>
+//
+// StoreNoise = false skips the noise writes entirely, for the S2.5 variant
+// that regenerates eps from Philox counters in the update instead of
+// keeping K*T*M floats around. It is a template parameter rather than a
+// branch so the stored path keeps exactly the code it has today.
+template <typename Dynamics, typename Cost, int M, bool StoreNoise = true>
 MPPI_HOST_DEVICE typename Dynamics::ScalarType rollout_and_cost(
     const Dynamics& dyn, const Cost& cost, const typename Dynamics::State& x0,
     const typename Dynamics::ScalarType* u_nominal,
@@ -116,7 +121,9 @@ MPPI_HOST_DEVICE typename Dynamics::ScalarType rollout_and_cost(
     sample_control(p, k, t, u_nom, u_pert, eps);
 
     for (int i = 0; i < M; ++i) {
-      noise[p.layout.index(k, t, i)] = eps[i];
+      if constexpr (StoreNoise) {
+        noise[p.layout.index(k, t, i)] = eps[i];
+      }
       s_cost += costs::control_coupling(p.gamma, u_nom[i], eps[i], p.sigma[i] * p.sigma[i]);
     }
 
