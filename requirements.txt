@@ -1,0 +1,6 @@
+# Visualization and plotting only — the controller itself has no Python
+# dependencies. See docs/visualization.md.
+rerun-sdk>=0.36
+matplotlib>=3.8
+numpy>=1.24
+pillow>=10.0

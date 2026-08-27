@@ -73,23 +73,12 @@ class Controller {
       State x = x0;
       Scalar s_cost = Scalar(0);
       for (int t = 0; t < T; ++t) {
-        auto block = rng::Philox4x32_10::block(cfg_.seed, iteration_, static_cast<std::uint32_t>(k),
-                                               static_cast<std::uint32_t>(t));
-        float z[4];
-        rng::normal_pair(block.w[0], block.w[1], z[0], z[1]);
-        rng::normal_pair(block.w[2], block.w[3], z[2], z[3]);
-
         Scalar u_pert[M];
         Scalar* eps = noise_slot(k, t);
+        const Scalar* u_nom = &u_[static_cast<std::size_t>(t) * M];
+        sample_control(k, t, iteration_, u_nom, u_pert, eps);
         for (int i = 0; i < M; ++i) {
-          Scalar u_nom = u_[static_cast<std::size_t>(t) * M + i];
-          Scalar raw = u_nom + cfg_.sigma[i] * static_cast<Scalar>(z[i]);
-          u_pert[i] = std::clamp(raw, cfg_.u_min[i], cfg_.u_max[i]);
-          // Post-clamp effective noise: what the rollout actually applied is
-          // also what the update must average, or clamped samples would pull
-          // the nominal toward controls nobody simulated.
-          eps[i] = u_pert[i] - u_nom;
-          s_cost += costs::control_coupling(gamma, u_nom, eps[i], cfg_.sigma[i] * cfg_.sigma[i]);
+          s_cost += costs::control_coupling(gamma, u_nom[i], eps[i], cfg_.sigma[i] * cfg_.sigma[i]);
         }
         if constexpr (M == 1) {
           x = integrators::euler_step(dyn_, x, u_pert[0], cfg_.dt);
@@ -139,9 +128,68 @@ class Controller {
   }
 
   const std::vector<Scalar>& nominal_sequence() const { return u_; }
+  const std::vector<Scalar>& rollout_costs() const { return costs_; }
+  const std::vector<Scalar>& rollout_weights() const { return weights_; }
   std::uint32_t iteration() const { return iteration_; }
 
+  struct RolloutTrace {
+    std::vector<State> states;     // horizon + 1, starting at x0
+    std::vector<Scalar> controls;  // horizon * M, post-clamp applied control
+    std::vector<Scalar> eps;       // horizon * M, post-clamp effective noise
+  };
+
+  // Replays rollout k of `iteration` exactly as step() simulated it, given
+  // the nominal sequence as it stood before that step(). Noise is
+  // regenerated from Philox counters rather than stored trajectories, so
+  // the hot loop pays nothing for visualization. Shares sample_control()
+  // with step(), so ghost trails cannot drift from what was really rolled
+  // out (S1.7; S4.6's hero render uses the same path).
+  RolloutTrace replay_rollout(const State& x0, const std::vector<Scalar>& u_snapshot,
+                              std::uint32_t iteration, int k) const {
+    RolloutTrace trace;
+    trace.states.reserve(static_cast<std::size_t>(cfg_.horizon) + 1);
+    trace.controls.resize(static_cast<std::size_t>(cfg_.horizon) * M);
+    trace.eps.resize(static_cast<std::size_t>(cfg_.horizon) * M);
+    trace.states.push_back(x0);
+
+    State x = x0;
+    for (int t = 0; t < cfg_.horizon; ++t) {
+      std::size_t off = static_cast<std::size_t>(t) * M;
+      sample_control(k, t, iteration, &u_snapshot[off], &trace.controls[off], &trace.eps[off]);
+      if constexpr (M == 1) {
+        x = integrators::euler_step(dyn_, x, trace.controls[off], cfg_.dt);
+      } else {
+        Scalar u_pert[M];
+        for (int i = 0; i < M; ++i) {
+          u_pert[i] = trace.controls[off + i];
+        }
+        x = integrators::euler_step(dyn_, x, u_pert, cfg_.dt);
+      }
+      trace.states.push_back(x);
+    }
+    return trace;
+  }
+
  private:
+  // Draws rollout k's control at timestep t from the Philox counter
+  // (seed, iteration, k, t), clamps to the actuator limits, and reports the
+  // post-clamp effective noise: what the rollout actually applied is also
+  // what the update must average, or clamped samples would pull the nominal
+  // toward controls nobody simulated.
+  void sample_control(int k, int t, std::uint32_t iteration, const Scalar* u_nom, Scalar* u_pert,
+                      Scalar* eps) const {
+    auto block = rng::Philox4x32_10::block(cfg_.seed, iteration, static_cast<std::uint32_t>(k),
+                                           static_cast<std::uint32_t>(t));
+    float z[4];
+    rng::normal_pair(block.w[0], block.w[1], z[0], z[1]);
+    rng::normal_pair(block.w[2], block.w[3], z[2], z[3]);
+    for (int i = 0; i < M; ++i) {
+      Scalar raw = u_nom[i] + cfg_.sigma[i] * static_cast<Scalar>(z[i]);
+      u_pert[i] = std::clamp(raw, cfg_.u_min[i], cfg_.u_max[i]);
+      eps[i] = u_pert[i] - u_nom[i];
+    }
+  }
+
   Scalar* noise_slot(int k, int t) {
     return noise_.data() + (static_cast<std::size_t>(k) * cfg_.horizon + t) * M;
   }

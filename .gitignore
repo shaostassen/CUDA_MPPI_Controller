@@ -11,5 +11,13 @@ out/
 .idea/
 compile_commands.json
 
+# python (visualization scripts only; see docs/visualization.md)
+.venv/
+__pycache__/
+
+# visualization intermediates — the .rrd and .gif are committed, these are not
+trajectory.csv
+ghosts.csv
+
 # os
 .DS_Store
