@@ -55,9 +55,10 @@ ParityResult compare_costs(int samples) {
                                                           cpu_params, k, cpu_noise.data());
   }
 
-  // Device run, time-major noise layout (PLAN.md §1 decision 9).
+  // Device run with the layout the GPU controller actually uses, so this
+  // test exercises production indexing rather than a variant of it.
   auto gpu_params = cpu_params;
-  gpu_params.layout = mppi::layout_time_major(samples, 1);
+  gpu_params.layout = mppi::layout_gemv_major(samples, 1);
 
   mppi::cuda::DeviceBuffer<float> d_u(u_nominal.size());
   mppi::cuda::DeviceBuffer<float> d_noise(noise_n);

@@ -12,7 +12,8 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 if(ENABLE_CUDA)
-  target_sources(mppi_tests PRIVATE cuda_smoke_test.cu philox_parity_test.cu cuda_rollout_test.cu)
+  target_sources(mppi_tests PRIVATE cuda_smoke_test.cu philox_parity_test.cu cuda_rollout_test.cu
+                 cuda_iteration_test.cu)
   target_link_libraries(mppi_tests PRIVATE mppi_cuda)
 endif()
 

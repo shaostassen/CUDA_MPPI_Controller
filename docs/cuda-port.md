@@ -35,19 +35,60 @@ corresponding slots. It passes bit-exactly.
 
 So if GPU/CPU costs ever diverge, the layout is already ruled out.
 
+## A layout tension in the plan, and how it is resolved
+
+PLAN.md §1 decision 8 wants the noise usable as a column-major `K x (T*m)`
+matrix so the weighted sum is a single cuBLAS `Sgemv`. Decision 9 pins the
+layout as `[T][K][m]`. Those two are only compatible when `m == 1`:
+
+| layout | element (k,t,i) | Sgemv view needs |
+|---|---|---|
+| `[T][K][m]` | `t*K*m + k*m + i` | `k + (t*m+i)*K` |
+| `[T][m][K]` | `t*m*K + i*K + k` | `k + (t*m+i)*K` ✓ |
+
+`[T][m][K]` satisfies the Sgemv view for every `m`, and is *better* coalesced
+besides: adjacent `k` are adjacent in memory rather than `m` apart. For
+`m == 1` it is the identical mapping, so adopting it changes nothing about
+the cartpole work while leaving the quadrotor (`m = 4`) a layout that still
+works. The device path uses it (`layout_gemv_major`); `layout_time_major` is
+kept because decision 9 as written is still the right thing for a
+hand-rolled reduction that does not go through cuBLAS (S2.4).
+
+`tests/layout_test.cpp` emulates the exact `cublasSgemv` call on the host —
+same transpose, same `lda`, same indexing — and requires it to reproduce the
+reference weighted sum, so the call parameters are checked before cuBLAS is
+ever involved.
+
 ## Status
 
 | Piece | Verified how |
 |---|---|
 | Shared rollout core | CPU tests; reproduces controller costs bit-exactly |
-| Noise layout equivalence | CPU test, bit-exact both directions |
+| Noise layout equivalence (3 layouts) | CPU test, bit-exact |
+| Sgemv call formulation | CPU test emulating the exact cuBLAS call |
 | Device buffers (S2.1) | syntax-checked only |
 | Rollout kernel v1 (S2.2) | syntax-checked only |
+| Reduction path v1 (S2.3) | syntax-checked only |
 | CPU↔GPU cost parity | **pending Orin** (`tests/cuda_rollout_test.cu`) |
+| Full-iteration parity, GPU swing-up | **pending Orin** (`tests/cuda_iteration_test.cu`) |
 
 Nothing in the CUDA column has ever run. The Orin is the only CUDA hardware
 for this project, so `scripts/gpu-test.sh` on that machine is what turns the
-bottom three rows into results. Until then, treat the kernel as unproven.
+bottom rows into results. Until then, treat the kernels as unproven.
+
+## Keeping the iteration on-device
+
+`GpuController::step_device()` runs rollout → CUB min → exp weights → CUB sum
+→ normalize → `Sgemv` → fused update+shift without a single host round trip:
+beta and the normalizer stay as device scalars consumed by the next kernel
+rather than being read back. `x0` rides in as a kernel argument, so even the
+closed loop transfers only the emitted control back — the shape S2.1 asks
+for.
+
+The update and the receding-horizon shift are fused into one kernel writing
+to a second buffer. Shifting in place would race (thread `t` reading `u[t+1]`
+while `t+1` writes it); double-buffering makes it race-free and saves a
+launch.
 
 ## Iterating on kernels without a GPU
 

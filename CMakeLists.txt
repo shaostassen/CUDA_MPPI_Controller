@@ -17,6 +17,9 @@ if(ENABLE_CUDA)
   set(CMAKE_CUDA_STANDARD 20)
   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   set(CMAKE_CUDA_ARCHITECTURES "87-real;87-virtual")
+  # cuBLAS for the S2.3 weighted-noise Sgemv; CUB is header-only and ships
+  # with the toolkit.
+  find_package(CUDAToolkit REQUIRED)
 endif()
 
 # Optional: enables the S1.6 OpenMP execution policy, tests, and bench.

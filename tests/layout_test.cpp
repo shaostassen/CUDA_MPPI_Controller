@@ -67,11 +67,12 @@ TEST(NoiseLayout, TimeMajorMatchesRolloutMajor) {
   }
 }
 
-// Both layouts must address each (k, t, i) slot exactly once — an aliasing
+// Every layout must address each (k, t, i) slot exactly once — an aliasing
 // bug here would silently corrupt the weighted-noise sum on device.
-TEST(NoiseLayout, BothLayoutsAreBijections) {
+TEST(NoiseLayout, AllLayoutsAreBijections) {
   const int K = 7, T = 5, M = 2;
-  for (auto layout : {mppi::layout_rollout_major(T, M), mppi::layout_time_major(K, M)}) {
+  for (auto layout : {mppi::layout_rollout_major(T, M), mppi::layout_time_major(K, M),
+                      mppi::layout_gemv_major(K, M)}) {
     std::vector<int> hits(static_cast<std::size_t>(K) * T * M, 0);
     for (int k = 0; k < K; ++k) {
       for (int t = 0; t < T; ++t) {
@@ -85,6 +86,79 @@ TEST(NoiseLayout, BothLayoutsAreBijections) {
     }
     for (std::size_t i = 0; i < hits.size(); ++i) {
       EXPECT_EQ(hits[i], 1) << "slot " << i << " addressed " << hits[i] << " times";
+    }
+  }
+}
+
+// For m == 1 the literal decision-9 layout and the gemv layout must be the
+// same mapping — that is what makes adopting the latter free for the
+// cartpole work rather than a behavioral change.
+TEST(NoiseLayout, GemvAndTimeMajorAgreeWhenSingleControlDim) {
+  const int K = 9, T = 4;
+  auto tm = mppi::layout_time_major(K, 1);
+  auto gm = mppi::layout_gemv_major(K, 1);
+  for (int k = 0; k < K; ++k) {
+    for (int t = 0; t < T; ++t) {
+      ASSERT_EQ(tm.index(k, t, 0), gm.index(k, t, 0)) << "k=" << k << " t=" << t;
+    }
+  }
+}
+
+// The weighted noise sum is a cuBLAS Sgemv on device (PLAN.md §1 decision 8):
+// with the gemv layout the noise buffer IS a column-major K x (T*M) matrix,
+// so du = A^T w. Getting those call parameters wrong is an easy and quiet
+// mistake, so emulate the exact call on the host — same transpose, same lda,
+// same indexing cuBLAS would use — and require it to reproduce the
+// straightforward reference sum.
+TEST(NoiseLayout, SgemvFormulationMatchesReferenceWeightedSum) {
+  const int K = 32, T = 6, M = 3;
+  auto layout = mppi::layout_gemv_major(K, M);
+
+  std::vector<float> noise(static_cast<std::size_t>(K) * T * M);
+  for (int k = 0; k < K; ++k) {
+    for (int t = 0; t < T; ++t) {
+      for (int i = 0; i < M; ++i) {
+        noise[layout.index(k, t, i)] = 0.01f * static_cast<float>(k) +
+                                        0.1f * static_cast<float>(t) - static_cast<float>(i);
+      }
+    }
+  }
+  std::vector<float> w(K);
+  for (int k = 0; k < K; ++k) {
+    w[k] = 1.0f / static_cast<float>(K) + 0.001f * static_cast<float>(k % 5);
+  }
+
+  // Reference: the plain nested sum the CPU controller performs.
+  std::vector<float> du_ref(static_cast<std::size_t>(T) * M, 0.0f);
+  for (int t = 0; t < T; ++t) {
+    for (int i = 0; i < M; ++i) {
+      float acc = 0.0f;
+      for (int k = 0; k < K; ++k) {
+        acc += w[k] * noise[layout.index(k, t, i)];
+      }
+      du_ref[static_cast<std::size_t>(t) * M + i] = acc;
+    }
+  }
+
+  // Emulated cublasSgemv(handle, CUBLAS_OP_T, m=K, n=T*M, &one, A, lda=K,
+  //                      w, 1, &zero, y, 1):
+  //   y[j] = sum_k A[k + j*lda] * w[k]
+  const int lda = K;
+  const int n = T * M;
+  std::vector<float> y(n, 0.0f);
+  for (int j = 0; j < n; ++j) {
+    float acc = 0.0f;
+    for (int k = 0; k < K; ++k) {
+      acc += noise[k + j * lda] * w[k];
+    }
+    y[j] = acc;
+  }
+
+  // y is indexed by j = t*M + i, which is exactly du's own ordering.
+  for (int t = 0; t < T; ++t) {
+    for (int i = 0; i < M; ++i) {
+      int j = t * M + i;
+      ASSERT_NEAR(y[j], du_ref[j], 1e-6f) << "t=" << t << " i=" << i;
     }
   }
 }

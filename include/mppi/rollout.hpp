@@ -16,26 +16,44 @@ MPPI_HOST_DEVICE inline Scalar clamp_to(Scalar v, Scalar lo, Scalar hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// Noise buffer addressing. The CPU reference stores [K][T][M]; the CUDA
-// path stores [T][K][M] so that at fixed t adjacent threads (k) touch
-// adjacent memory (PLAN.md §1 decision 9). Expressing both as a pair of
-// strides lets one rollout function serve both layouts, which is what makes
-// CPU<->GPU parity structural rather than a coincidence to be debugged.
+// Noise buffer addressing, as three strides. Keeping the rollout core
+// layout-agnostic is what makes CPU<->GPU parity structural rather than a
+// coincidence to be debugged — and it makes each layout host-testable.
 struct NoiseLayout {
   int rollout_stride;  // elements between consecutive k
   int time_stride;     // elements between consecutive t
+  int dim_stride;      // elements between consecutive control dims
 
   MPPI_HOST_DEVICE int index(int k, int t, int i) const {
-    return k * rollout_stride + t * time_stride + i;
+    return k * rollout_stride + t * time_stride + i * dim_stride;
   }
 };
 
-MPPI_HOST_DEVICE inline NoiseLayout layout_rollout_major(int horizon, int m) {  // [K][T][M]
-  return NoiseLayout{horizon * m, m};
+// [K][T][M] — the CPU reference. Each rollout's noise is contiguous, which
+// is what a single-threaded loop over k wants.
+MPPI_HOST_DEVICE inline NoiseLayout layout_rollout_major(int horizon, int m) {
+  return NoiseLayout{horizon * m, m, 1};
 }
 
-MPPI_HOST_DEVICE inline NoiseLayout layout_time_major(int samples, int m) {  // [T][K][M]
-  return NoiseLayout{m, samples * m};
+// [T][K][M] — PLAN.md §1 decision 9 as literally written.
+MPPI_HOST_DEVICE inline NoiseLayout layout_time_major(int samples, int m) {
+  return NoiseLayout{m, samples * m, 1};
+}
+
+// [T][M][K] — what the CUDA path actually uses.
+//
+// Decision 9 asks for coalesced reads at fixed t, and decision 8 wants the
+// noise usable as a column-major K x (T*m) matrix so the weighted sum is one
+// cuBLAS Sgemv. [T][K][M] delivers both only when m == 1: for m > 1 its
+// element (k,t,i) sits at t*K*m + k*m + i, while the Sgemv view needs
+// k + (t*m+i)*K. [T][M][K] satisfies the Sgemv view for every m, and is
+// better coalesced besides — adjacent k are adjacent in memory rather than
+// m apart.
+//
+// For m == 1 the two are the same mapping, so the cartpole work is
+// unaffected and the quadrotor (m = 4) gets a layout that still works.
+MPPI_HOST_DEVICE inline NoiseLayout layout_gemv_major(int samples, int m) {
+  return NoiseLayout{1, m * samples, samples};
 }
 
 // Everything a single rollout needs, as a POD so it can be passed by value
