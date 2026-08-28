@@ -26,4 +26,5 @@ On the Orin, use `--preset release` (adds `ENABLE_CUDA=ON`, `sm_87`) or
 `-DOpenMP_ROOT=$(brew --prefix libomp)` for the OpenMP path.
 
 Docs: [environment](docs/env.md) · [OpenMP](docs/openmp.md) ·
-[visualization](docs/visualization.md)
+[visualization](docs/visualization.md) · [CUDA port](docs/cuda-port.md) ·
+[benchmarking](docs/benchmarking.md)

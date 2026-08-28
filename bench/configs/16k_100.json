@@ -1,0 +1,14 @@
+{
+  "name": "16k_100",
+  "samples": 16384,
+  "horizon": 100,
+  "warmup": 50,
+  "measure": 500,
+  "backends": [
+    "cpu_1t",
+    "cpu_omp",
+    "cuda_v1",
+    "cuda_v2",
+    "cuda_regen"
+  ]
+}

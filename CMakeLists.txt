@@ -36,6 +36,15 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# JSON config files for the S3.1 benchmark harness. Release archive rather
+# than the git repo: the repo clone is large and none of it is needed.
+FetchContent_Declare(
+  nlohmann_json
+  URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+  URL_HASH SHA256=d6c65aca6b1ed68e7a182f4757257b107ae403032760ed6ef121c9d55e81757d
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 enable_testing()
 
 add_library(mppi_core INTERFACE)
@@ -46,5 +55,6 @@ if(ENABLE_CUDA)
   add_subdirectory(src/cuda)
 endif()
 
+add_subdirectory(bench)
 add_subdirectory(examples)
 add_subdirectory(tests)
