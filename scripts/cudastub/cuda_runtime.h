@@ -89,6 +89,9 @@ extern "C" cudaError_t cudaSetupArgument(const void* arg, size_t size, size_t of
 extern "C" cudaError_t cudaLaunch(const void* func);
 
 // Subset of the real cudaDeviceProp — only the fields this project reads.
+// clockRate and memoryClockRate are deliberately ABSENT: CUDA 13.0 removed
+// them, so leaving them out here makes the stub catch any reintroduced use
+// rather than letting it through to fail on the Jetson.
 struct cudaDeviceProp {
   char name[256];
   size_t totalGlobalMem;
@@ -97,11 +100,9 @@ struct cudaDeviceProp {
   int warpSize;
   int maxThreadsPerBlock;
   int maxThreadsPerMultiProcessor;
-  int clockRate;
   int multiProcessorCount;
   int l2CacheSize;
   int memoryBusWidth;
-  int memoryClockRate;
   int major;
   int minor;
   int integrated;
@@ -111,7 +112,14 @@ struct cudaDeviceProp {
   int cooperativeLaunch;
 };
 
+enum cudaDeviceAttr {
+  cudaDevAttrClockRate = 13,
+  cudaDevAttrMemoryClockRate = 36,
+  cudaDevAttrGlobalMemoryBusWidth = 37,
+};
+
 extern "C" {
+cudaError_t cudaDeviceGetAttribute(int* value, enum cudaDeviceAttr attr, int device);
 cudaError_t cudaGetDeviceCount(int* count);
 cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int device);
 cudaError_t cudaRuntimeGetVersion(int* version);

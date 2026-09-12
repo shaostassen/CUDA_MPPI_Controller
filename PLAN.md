@@ -1,6 +1,6 @@
 # cuda_mppi_controller — GPU-Accelerated MPPI Controller: Plan & Backlog
 
-**Owner:** Shao · **Window:** ~9 weeks @ 5–8 h/wk (~60–70 h total) · **Hardware:** Jetson Orin Nano (sm_87, JetPack ≥ 6.2) — sole CUDA machine; Mac edits over SSH, no local CUDA · **Stretch target:** desktop-GPU comparison column if lab hardware materializes
+**Owner:** Shao · **Window:** ~9 weeks @ 5–8 h/wk (~60–70 h total) · **Hardware:** Jetson Orin Nano (sm_87, JetPack 7.2 / CUDA 13) — sole CUDA machine; Mac edits over SSH, no local CUDA · **Stretch target:** desktop-GPU comparison column if lab hardware materializes
 
 **What this project proves:** raw CUDA kernel design + profiling fluency on real embedded hardware, sitting directly on existing control-theory and parallel-computing strengths. Headline artifact: a quadrotor flying a figure-8 under closed-loop MPPI at 100 Hz on a ~15 W board, evaluating 10,000+ sampled futures per control step, backed by an honest speedup table against CPU, OpenMP, and PyTorch (including `torch.compile`) baselines measured on the same SoC — a perf-per-watt story a desktop build can't tell.
 
@@ -10,8 +10,10 @@
 
 Stated up front so every story below inherits them. Change any of these and the backlog still holds — only parameters shift.
 
-1. **OS / dev flow:** JetPack ≥ 6.2 (L4T, Ubuntu 22.04-based) on the Orin Nano; MAXN/Super power mode + fan profile set once and recorded. The Mac cannot build CUDA — edit locally (VS Code Remote-SSH or rsync-on-save), build/test/profile on the Orin. Phase A's CPU reference also builds natively on the Mac for fast iteration, but every recorded number comes from the Orin.
-2. **Toolchain:** JetPack's CUDA (12.6 on JetPack 6.2 — use the newest Orin-supporting JetPack), L4T's GCC, C++20, CMake ≥ 3.28 with presets (pip-install cmake on the Orin if apt's is older). Build targets `sm_87` real + `compute_87` PTX; a desktop arch gets added only if the stretch column happens.
+1. **OS / dev flow:** JetPack 7.2 (L4T r39.x) on the Orin Nano; MAXN power mode + fan profile set once and recorded. The Mac cannot build CUDA — edit locally, build/test/profile on the Orin over SSH-on-USB (`192.168.55.1`). Phase A's CPU reference also builds natively on the Mac for fast iteration, but every recorded number comes from the Orin. Bring-up procedure: `docs/jetson-bringup.md`.
+2. **Toolchain:** JetPack 7.2's CUDA 13, L4T's GCC, C++20, CMake ≥ 3.28 with presets. Build targets `sm_87` real + `compute_87` PTX; a desktop arch gets added only if the stretch column happens.
+
+   *Revised 2026-09-12 (was "JetPack ≥ 6.2 / CUDA 12.6").* JetPack 7.2 is what NVIDIA's current Orin Nano installer ships, so targeting 6.2 would mean fighting the supported path for no benefit to the kernels. Two consequences worth carrying: CUDA 13 **removed** `cudaDeviceProp::clockRate` and `memoryClockRate` (use `cudaDeviceGetAttribute`), and the aarch64 PyTorch wheels for CUDA 13 are less trodden than the 12.6 ones — which is a risk to the E3 baselines only, already covered by §8's N/A-with-reason fallback.
 3. **Precision:** FP32 throughout the controller. FP64 appears only in oracle tests for integrator correctness.
 4. **RNG:** custom header-only **Philox4x32-10**, marked `__host__ __device__`, counter = (seed, iteration, k, t). No cuRAND dependency. Rationale: exact bit-level CPU↔GPU noise parity (makes parity tests strict instead of statistical) and zero library friction on Jetson.
 5. **Integrators:** explicit Euler, dt = 0.02 s inside rollouts (standard MPPI practice, cheap); RK4 ground-truth sim environment. Phase A uses the same model/integrator on both sides for clean parity; deliberate model mismatch is introduced in Phase C as a robustness demonstration.
@@ -48,7 +50,7 @@ Stories sized ~2–5 h. AC = acceptance criteria; a story is done only when its 
 
 ### E0 — Bootstrap (~5 h)
 
-- **S0.1 Toolchain verification.** AC: JetPack updated (≥ 6.2), power mode + fan set and recorded; deviceQuery reports sm_87; `ncu` and `nsys` successfully profile a sample kernel on the Orin (ncu wants sudo for counters on Tegra); Mac→Orin Remote-SSH flow working; JetPack/CUDA/driver versions logged in `docs/env.md`.
+- **S0.1 Toolchain verification.** AC: JetPack 7.2 installed, power mode + fan set and recorded; `examples/device_query` reports compute capability 8.7; `ncu` and `nsys` successfully profile a sample kernel on the Orin (ncu wants sudo for counters on Tegra); Mac→Orin SSH-on-USB working; JetPack/CUDA/driver versions logged in `docs/env.md`. Run `scripts/jetson-setup-check.sh`, which performs these checks and generates `docs/env.md` from what it observes.
 - **S0.2 Repo scaffold.** CMake presets (Debug / Release / Release-Profile with `-lineinfo`), GoogleTest wired, clang-format, `.gitignore`, MIT license, README stub, arch `sm_87` real + `compute_87` PTX. AC: `cmake --preset release && ctest --preset release` green on the Orin on a trivial kernel test; `--ptxas-options=-v` output captured in build log.
 - **S0.3 CI.** GitHub Actions: CPU-only build + CPU tests + format check (no free GPU runners). GPU tests gated behind `-DENABLE_CUDA=ON`, run locally via `scripts/gpu-test.sh`. AC: badge green on main.
 
@@ -217,7 +219,7 @@ Working title: **"10,000 futures, 100 times a second, on 15 watts: MPPI in raw C
 
 ## 9. Session 1 — next 2–3 hours
 
-1. Update JetPack (≥ 6.2), set MAXN/Super power mode + fan, run deviceQuery; log sm_87 + JetPack/CUDA/driver versions in `docs/env.md`; confirm `ncu`/`nsys` can profile a toy kernel.
+1. Flash JetPack 7.2 per `docs/jetson-bringup.md` (ISO installer on a USB stick, installs to microSD; check the QSPI firmware trap), set MAXN power mode + fan, then run `scripts/jetson-setup-check.sh` to generate `docs/env.md` and confirm `ncu`/`nsys` work.
 2. Wire up the Mac→Orin dev flow: SSH keys, VS Code Remote-SSH (or rsync-on-save); pip-install cmake ≥ 3.28 on the Orin if apt's is old.
 3. Push the §6 scaffold with CMake presets, GTest, and one trivial sm_87 kernel test; `ctest` green on the Orin. (S0.1–S0.2 done.)
 4. Start S1.1: pendulum dynamics + the energy-drift test (builds natively on the Mac too — CPU only).

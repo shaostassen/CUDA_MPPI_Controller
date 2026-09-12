@@ -31,11 +31,20 @@ int main() {
   for (int i = 0; i < count; ++i) {
     cudaDeviceProp p{};
     cudaGetDeviceProperties(&p, i);
+
+    // clockRate and memoryClockRate were REMOVED from cudaDeviceProp in
+    // CUDA 13.0 (deprecated through 12.x). cudaDeviceGetAttribute is the
+    // documented replacement and works on both, so this file builds under
+    // JetPack 6 and 7 alike.
+    int clock_khz = 0, mem_clock_khz = 0;
+    cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, i);
+    cudaDeviceGetAttribute(&mem_clock_khz, cudaDevAttrMemoryClockRate, i);
+
     std::printf("device_%d_name: %s\n", i, p.name);
     std::printf("device_%d_compute_capability: %d.%d\n", i, p.major, p.minor);
     std::printf("device_%d_sm_arch: sm_%d%d\n", i, p.major, p.minor);
     std::printf("device_%d_multiprocessors: %d\n", i, p.multiProcessorCount);
-    std::printf("device_%d_clock_khz: %d\n", i, p.clockRate);
+    std::printf("device_%d_clock_khz: %d\n", i, clock_khz);
     std::printf("device_%d_global_mem_mb: %.0f\n", i,
                 static_cast<double>(p.totalGlobalMem) / (1024.0 * 1024.0));
     std::printf("device_%d_l2_cache_kb: %d\n", i, p.l2CacheSize / 1024);
@@ -46,9 +55,9 @@ int main() {
     std::printf("device_%d_max_threads_per_block: %d\n", i, p.maxThreadsPerBlock);
     std::printf("device_%d_max_threads_per_sm: %d\n", i, p.maxThreadsPerMultiProcessor);
     std::printf("device_%d_memory_bus_width_bits: %d\n", i, p.memoryBusWidth);
-    std::printf("device_%d_memory_clock_khz: %d\n", i, p.memoryClockRate);
+    std::printf("device_%d_memory_clock_khz: %d\n", i, mem_clock_khz);
     // Peak theoretical bandwidth: DDR, so two transfers per clock.
-    double bw = 2.0 * p.memoryClockRate * 1000.0 * (p.memoryBusWidth / 8.0) / 1.0e9;
+    double bw = 2.0 * mem_clock_khz * 1000.0 * (p.memoryBusWidth / 8.0) / 1.0e9;
     std::printf("device_%d_peak_bandwidth_gbps: %.1f\n", i, bw);
     // Integrated == shares DRAM with the CPU, which is the whole reason the
     // closed loop can hand over x0 without a copy.
