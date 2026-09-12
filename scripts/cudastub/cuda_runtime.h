@@ -88,7 +88,34 @@ extern "C" unsigned __cudaPushCallConfiguration(dim3 gridDim, dim3 blockDim, siz
 extern "C" cudaError_t cudaSetupArgument(const void* arg, size_t size, size_t offset);
 extern "C" cudaError_t cudaLaunch(const void* func);
 
+// Subset of the real cudaDeviceProp — only the fields this project reads.
+struct cudaDeviceProp {
+  char name[256];
+  size_t totalGlobalMem;
+  size_t sharedMemPerBlock;
+  int regsPerBlock;
+  int warpSize;
+  int maxThreadsPerBlock;
+  int maxThreadsPerMultiProcessor;
+  int clockRate;
+  int multiProcessorCount;
+  int l2CacheSize;
+  int memoryBusWidth;
+  int memoryClockRate;
+  int major;
+  int minor;
+  int integrated;
+  int canMapHostMemory;
+  int unifiedAddressing;
+  int concurrentKernels;
+  int cooperativeLaunch;
+};
+
 extern "C" {
+cudaError_t cudaGetDeviceCount(int* count);
+cudaError_t cudaGetDeviceProperties(cudaDeviceProp* prop, int device);
+cudaError_t cudaRuntimeGetVersion(int* version);
+cudaError_t cudaDriverGetVersion(int* version);
 cudaError_t cudaMalloc(void** devPtr, size_t size);
 cudaError_t cudaFree(void* devPtr);
 cudaError_t cudaMemcpy(void* dst, const void* src, size_t count, enum cudaMemcpyKind kind);
