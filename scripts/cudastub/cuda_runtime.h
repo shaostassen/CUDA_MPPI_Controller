@@ -6,6 +6,13 @@
 #pragma once
 
 #include <cstddef>
+// <cstdlib> is not used by this header, but clang's CUDA mode replaces <new>
+// with its own cuda_wrappers/new, whose device operator new calls ::malloc and
+// ::free. Because this stub is force-included ahead of everything else, any
+// source that pulls in <new> (via <string>, <vector>, gtest, ...) would fail on
+// those two names being undeclared. Declaring them here keeps the check usable
+// on sources that use the standard library.
+#include <cstdlib>
 
 #define __global__ __attribute__((global))
 #define __device__ __attribute__((device))
