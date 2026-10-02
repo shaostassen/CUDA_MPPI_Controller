@@ -94,8 +94,7 @@ int main() {
       mppi::cuda::NoiseMode mode;
     };
     const Case cases[] = {
-        {"v1_library", "stored", mppi::cuda::ReductionPath::Library,
-         mppi::cuda::NoiseMode::Stored},
+        {"v1_library", "stored", mppi::cuda::ReductionPath::Library, mppi::cuda::NoiseMode::Stored},
         {"v2_handrolled", "stored", mppi::cuda::ReductionPath::HandRolled,
          mppi::cuda::NoiseMode::Stored},
         {"v2_handrolled", "regenerated", mppi::cuda::ReductionPath::HandRolled,

@@ -40,7 +40,7 @@ int main() {
       double xv[4] = {0, 0, 0, 0};
       xv[dim] = v;
       cartpole_task::State s{static_cast<float>(xv[0]), static_cast<float>(xv[1]),
-                              static_cast<float>(xv[2]), static_cast<float>(xv[3])};
+                             static_cast<float>(xv[2]), static_cast<float>(xv[3])};
       double u_inf = 0.0, u_fin = 0.0;
       for (int j = 0; j < 4; ++j) {
         u_inf -= k_inf[j] * xv[j];

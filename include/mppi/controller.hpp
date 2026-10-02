@@ -20,8 +20,8 @@ namespace mppi {
 // OpenMp instantiations mutually unconvertible for no reason.
 template <typename Scalar, int M>
 struct ControllerConfig {
-  int samples = 512;              // K
-  int horizon = 50;               // T
+  int samples = 512;  // K
+  int horizon = 50;   // T
   Scalar dt = Scalar(0.02);
   Scalar lambda = Scalar(1);
   Scalar alpha = Scalar(0);       // gamma = lambda * (1 - alpha)
@@ -72,8 +72,8 @@ class Controller {
 
     const auto params = rollout_params();
     Exec::for_range(K, [&](int k) {
-      costs_[k] = rollout_and_cost<Dynamics, Cost, M>(dyn_, cost_, x0, u_.data(), params, k,
-                                                      noise_.data());
+      costs_[k] =
+          rollout_and_cost<Dynamics, Cost, M>(dyn_, cost_, x0, u_.data(), params, k, noise_.data());
     });
 
     // Serial on purpose: O(K) and it keeps the weight normalization order
@@ -112,10 +112,18 @@ class Controller {
     return beta;
   }
 
-  const std::vector<Scalar>& nominal_sequence() const { return u_; }
-  const std::vector<Scalar>& rollout_costs() const { return costs_; }
-  const std::vector<Scalar>& rollout_weights() const { return weights_; }
-  std::uint32_t iteration() const { return iteration_; }
+  const std::vector<Scalar>& nominal_sequence() const {
+    return u_;
+  }
+  const std::vector<Scalar>& rollout_costs() const {
+    return costs_;
+  }
+  const std::vector<Scalar>& rollout_weights() const {
+    return weights_;
+  }
+  std::uint32_t iteration() const {
+    return iteration_;
+  }
 
   struct RolloutTrace {
     std::vector<State> states;     // horizon + 1, starting at x0
@@ -188,9 +196,9 @@ class Controller {
   Cost cost_;
   Config cfg_;
   std::uint32_t iteration_ = 0;
-  std::vector<Scalar> u_;       // nominal control sequence, [T][M]
-  std::vector<Scalar> noise_;   // effective noise per rollout, [K][T][M]
-  std::vector<Scalar> costs_;   // S_k
+  std::vector<Scalar> u_;      // nominal control sequence, [T][M]
+  std::vector<Scalar> noise_;  // effective noise per rollout, [K][T][M]
+  std::vector<Scalar> costs_;  // S_k
   std::vector<Scalar> weights_;
 };
 

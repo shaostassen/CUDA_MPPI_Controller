@@ -1,8 +1,8 @@
+#include "mppi/partition.hpp"
+
 #include <gtest/gtest.h>
 
 #include <vector>
-
-#include "mppi/partition.hpp"
 
 // The v2 reduction kernels (S2.4) decompose work two ways: one block per
 // output element j -> (t, i), and threads striding over k within a block.

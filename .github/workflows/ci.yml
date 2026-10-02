@@ -46,7 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Covers examples/ and bench/ too: they were outside the gate and had
+      # drifted out of format along with everything else.
       - name: clang-format check
         run: |
-          find include src tests -regex '.*\.\(cpp\|hpp\|cuh\|cu\)' \
+          find include src tests examples bench -regex '.*\.\(cpp\|hpp\|cuh\|cu\)' \
             -exec clang-format --dry-run --Werror {} +

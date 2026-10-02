@@ -1,9 +1,10 @@
+#include "mppi/lqr.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cmath>
 
 #include "cartpole_task.hpp"
-#include "mppi/lqr.hpp"
 
 namespace {
 
@@ -95,10 +96,10 @@ TEST(MppiLqrCrossCheck, EffectiveGainTracksFiniteHorizonLqr) {
 
     xv[dim] = ranges[dim];
     cartpole_task::State plus{static_cast<float>(xv[0]), static_cast<float>(xv[1]),
-                               static_cast<float>(xv[2]), static_cast<float>(xv[3])};
+                              static_cast<float>(xv[2]), static_cast<float>(xv[3])};
     xv[dim] = -ranges[dim];
     cartpole_task::State minus{static_cast<float>(xv[0]), static_cast<float>(xv[1]),
-                                static_cast<float>(xv[2]), static_cast<float>(xv[3])};
+                               static_cast<float>(xv[2]), static_cast<float>(xv[3])};
 
     double u_plus = cartpole_task::mean_control_at(plus, kSeeds, kWindow);
     double u_minus = cartpole_task::mean_control_at(minus, kSeeds, kWindow);

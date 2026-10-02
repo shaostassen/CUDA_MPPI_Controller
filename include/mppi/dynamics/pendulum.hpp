@@ -24,7 +24,9 @@ struct Pendulum {
     MPPI_HOST_DEVICE State operator+(const State& o) const {
       return State{theta + o.theta, omega + o.omega};
     }
-    MPPI_HOST_DEVICE State operator*(Scalar s) const { return State{theta * s, omega * s}; }
+    MPPI_HOST_DEVICE State operator*(Scalar s) const {
+      return State{theta * s, omega * s};
+    }
   };
 
   // Returns d(State)/dt, reusing State's layout: the result's `.theta` field
@@ -32,8 +34,8 @@ struct Pendulum {
   // integrator combine states and derivatives with the same +/* operators).
   MPPI_HOST_DEVICE State derivative(const State& s, Scalar torque) const {
     Scalar inertia = mass * length * length;
-    Scalar omega_dot = (-gravity / length) * std::sin(s.theta) - (damping * s.omega) / inertia +
-                        torque / inertia;
+    Scalar omega_dot =
+        (-gravity / length) * std::sin(s.theta) - (damping * s.omega) / inertia + torque / inertia;
     return State{s.omega, omega_dot};
   }
 

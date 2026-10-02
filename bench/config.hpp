@@ -1,8 +1,7 @@
 #pragma once
 
-#include <nlohmann/json.hpp>
-
 #include <fstream>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -13,8 +12,8 @@ namespace bench {
 // Defaults match the §4 protocol so a config only has to state what differs.
 struct BenchConfig {
   std::string name;
-  int samples = 16384;   // K
-  int horizon = 50;      // T
+  int samples = 16384;  // K
+  int horizon = 50;     // T
   double dt = 0.02;
   double lambda = 2.0;
   double sigma = 3.0;

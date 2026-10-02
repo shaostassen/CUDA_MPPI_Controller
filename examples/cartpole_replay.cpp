@@ -21,8 +21,8 @@
 namespace {
 
 constexpr float kDuration = 10.0f;
-constexpr int kGhosts = 10;       // rollouts drawn per frame
-constexpr int kGhostStride = 5;   // subsample along the horizon
+constexpr int kGhosts = 10;      // rollouts drawn per frame
+constexpr int kGhostStride = 5;  // subsample along the horizon
 
 }  // namespace
 

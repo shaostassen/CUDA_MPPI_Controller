@@ -54,8 +54,7 @@ __global__ void normalize_kernel(Scalar* __restrict__ weights, const Scalar* __r
 //
 // which is exactly the CPU sequence's end state.
 template <typename Scalar, int M>
-__global__ void update_shift_kernel(const Scalar* __restrict__ u_in,
-                                    const Scalar* __restrict__ du,
+__global__ void update_shift_kernel(const Scalar* __restrict__ u_in, const Scalar* __restrict__ du,
                                     RolloutParams<Scalar, M> params, Scalar* __restrict__ u_out,
                                     Scalar* __restrict__ u_emit) {
   int t = blockIdx.x * blockDim.x + threadIdx.x;

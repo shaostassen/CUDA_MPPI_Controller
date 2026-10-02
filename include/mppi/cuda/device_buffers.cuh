@@ -24,7 +24,9 @@ class DeviceBuffer {
     }
   }
 
-  ~DeviceBuffer() { reset(); }
+  ~DeviceBuffer() {
+    reset();
+  }
 
   DeviceBuffer(const DeviceBuffer&) = delete;
   DeviceBuffer& operator=(const DeviceBuffer&) = delete;
@@ -57,11 +59,19 @@ class DeviceBuffer {
     CUDA_CHECK(cudaMemcpy(host, ptr_, count * sizeof(T), cudaMemcpyDeviceToHost));
   }
 
-  void zero() { CUDA_CHECK(cudaMemset(ptr_, 0, count_ * sizeof(T))); }
+  void zero() {
+    CUDA_CHECK(cudaMemset(ptr_, 0, count_ * sizeof(T)));
+  }
 
-  T* data() { return ptr_; }
-  const T* data() const { return ptr_; }
-  std::size_t size() const { return count_; }
+  T* data() {
+    return ptr_;
+  }
+  const T* data() const {
+    return ptr_;
+  }
+  std::size_t size() const {
+    return count_;
+  }
 
  private:
   T* ptr_ = nullptr;
@@ -87,7 +97,9 @@ class PinnedBuffer {
     }
   }
 
-  ~PinnedBuffer() { reset(); }
+  ~PinnedBuffer() {
+    reset();
+  }
 
   PinnedBuffer(const PinnedBuffer&) = delete;
   PinnedBuffer& operator=(const PinnedBuffer&) = delete;
@@ -116,10 +128,18 @@ class PinnedBuffer {
     count_ = 0;
   }
 
-  T* host_ptr() { return host_; }
-  const T* host_ptr() const { return host_; }
-  T* device_ptr() { return device_; }
-  std::size_t size() const { return count_; }
+  T* host_ptr() {
+    return host_;
+  }
+  const T* host_ptr() const {
+    return host_;
+  }
+  T* device_ptr() {
+    return device_;
+  }
+  std::size_t size() const {
+    return count_;
+  }
 
  private:
   T* host_ = nullptr;

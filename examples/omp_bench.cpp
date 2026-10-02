@@ -47,8 +47,8 @@ double median_step_ms(int reps) {
 
 int main() {
   using Serial = cartpole_task::Controller;
-  using Omp = mppi::Controller<cartpole_task::Plant, cartpole_task::SwingUpCost, 1,
-                               mppi::exec::OpenMp>;
+  using Omp =
+      mppi::Controller<cartpole_task::Plant, cartpole_task::SwingUpCost, 1, mppi::exec::OpenMp>;
 
   const int reps = 15;
   double serial_ms = median_step_ms<Serial>(reps);

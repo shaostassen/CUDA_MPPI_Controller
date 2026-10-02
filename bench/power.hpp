@@ -25,7 +25,9 @@ struct PowerSummary {
   double max_mw = 0.0;
   std::size_t samples = 0;
 
-  double mean_w() const { return mean_mw / 1000.0; }
+  double mean_w() const {
+    return mean_mw / 1000.0;
+  }
 };
 
 // Pulls one rail's instantaneous milliwatts out of a tegrastats line.

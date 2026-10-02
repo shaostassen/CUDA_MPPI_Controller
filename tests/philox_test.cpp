@@ -1,9 +1,9 @@
+#include "mppi/philox.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cmath>
 #include <cstdint>
-
-#include "mppi/philox.hpp"
 
 using mppi::rng::normal_pair;
 using mppi::rng::Philox4x32_10;

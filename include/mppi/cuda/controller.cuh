@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cub/cub.cuh>
 #include <cublas_v2.h>
 #include <cuda_runtime.h>
 
@@ -8,6 +7,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <cub/cub.cuh>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -39,14 +39,14 @@ enum class NoiseMode {
   Regenerated,
 };
 
-#define CUBLAS_CHECK(expr)                                                       \
-  do {                                                                           \
-    cublasStatus_t st__ = (expr);                                                \
-    if (st__ != CUBLAS_STATUS_SUCCESS) {                                         \
-      std::fprintf(stderr, "cuBLAS error %d for %s at %s:%d\n", int(st__), #expr, \
-                   __FILE__, __LINE__);                                          \
-      std::abort();                                                              \
-    }                                                                            \
+#define CUBLAS_CHECK(expr)                                                                  \
+  do {                                                                                      \
+    cublasStatus_t st__ = (expr);                                                           \
+    if (st__ != CUBLAS_STATUS_SUCCESS) {                                                    \
+      std::fprintf(stderr, "cuBLAS error %d for %s at %s:%d\n", int(st__), #expr, __FILE__, \
+                   __LINE__);                                                               \
+      std::abort();                                                                         \
+    }                                                                                       \
   } while (0)
 
 // Reduction path v1 (PLAN.md §1 decision 8): CUB DeviceReduce for the min and
@@ -96,8 +96,8 @@ class GpuController {
     std::size_t min_bytes = 0, sum_bytes = 0;
     CUDA_CHECK(::cub::DeviceReduce::Min(nullptr, min_bytes, d_costs_.data(), d_beta_.data(),
                                         cfg_.samples));
-    CUDA_CHECK(::cub::DeviceReduce::Sum(nullptr, sum_bytes, d_weights_.data(), d_z_.data(),
-                                        cfg_.samples));
+    CUDA_CHECK(
+        ::cub::DeviceReduce::Sum(nullptr, sum_bytes, d_weights_.data(), d_z_.data(), cfg_.samples));
     temp_bytes_ = std::max(min_bytes, sum_bytes);
     d_temp_ = DeviceBuffer<unsigned char>(temp_bytes_);
   }
@@ -147,8 +147,12 @@ class GpuController {
     ++iteration_;
   }
 
-  void set_reduction_path(ReductionPath p) { reduction_path_ = p; }
-  ReductionPath reduction_path() const { return reduction_path_; }
+  void set_reduction_path(ReductionPath p) {
+    reduction_path_ = p;
+  }
+  ReductionPath reduction_path() const {
+    return reduction_path_;
+  }
 
   // Regenerating requires the hand-rolled weighted sum: cuBLAS needs a
   // materialized matrix, and the whole point is not to materialize one.
@@ -158,7 +162,9 @@ class GpuController {
       reduction_path_ = ReductionPath::HandRolled;
     }
   }
-  NoiseMode noise_mode() const { return noise_mode_; }
+  NoiseMode noise_mode() const {
+    return noise_mode_;
+  }
 
   // Device bytes held for noise — zero in regenerated mode. This is the
   // memory saving S2.5 asks to record.
@@ -199,8 +205,12 @@ class GpuController {
     return b;
   }
 
-  std::uint32_t iteration() const { return iteration_; }
-  void set_block_size(int n) { block_size_ = n; }
+  std::uint32_t iteration() const {
+    return iteration_;
+  }
+  void set_block_size(int n) {
+    block_size_ = n;
+  }
 
   // Same packing as the CPU controller, except the noise layout: the device
   // path uses the gemv layout so the weighted sum is one Sgemv (see
@@ -244,8 +254,8 @@ class GpuController {
   // Z = sum_k exp(-(S_k - beta)/lambda).
   void reduce_normalizer(int K) {
     if (reduction_path_ == ReductionPath::Library) {
-      CUDA_CHECK(::cub::DeviceReduce::Sum(d_temp_.data(), temp_bytes_, d_weights_.data(),
-                                          d_z_.data(), K));
+      CUDA_CHECK(
+          ::cub::DeviceReduce::Sum(d_temp_.data(), temp_bytes_, d_weights_.data(), d_z_.data(), K));
       return;
     }
     int grid = std::min(kMaxPartials, grid_for(K, kReduceBlock));

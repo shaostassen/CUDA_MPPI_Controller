@@ -15,7 +15,7 @@ namespace cartpole_task {
 using Plant = mppi::dynamics::CartPole<float>;
 using State = Plant::State;
 
-inline constexpr float kRunWeights[4] = {3.0f, 0.2f, 10.0f, 0.2f};   // x, x_dot, theta, theta_dot
+inline constexpr float kRunWeights[4] = {3.0f, 0.2f, 10.0f, 0.2f};  // x, x_dot, theta, theta_dot
 inline constexpr float kTermWeights[4] = {15.0f, 1.0f, 100.0f, 2.0f};
 inline constexpr float kLambda = 2.0f;
 inline constexpr float kSigma = 3.0f;
