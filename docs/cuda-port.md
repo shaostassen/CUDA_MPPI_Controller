@@ -156,6 +156,21 @@ only on `__CUDACC__`, which nvcc defines but clang-CUDA does not — under
 clang every shared function would silently have become host-only. The guard
 now accepts either macro.
 
+CI runs the check as its own `cuda-syntax-check` job, because a local-only
+check rots: the stub was missing `<cstdlib>`, and since clang's CUDA mode
+routes `<new>` through its own `cuda_wrappers/new` (whose device
+`operator new` calls `::malloc`), every source that reached `<new>` through
+`<string>`, `<vector>` or gtest stopped parsing — 5 of the 8 `.cu` files,
+unnoticed. The job configures the `cpu` preset first, for the googletest
+headers the `.cu` tests include; FetchContent populates those at configure
+time, so nothing is built.
+
+The script also treats clang's exit status as the verdict rather than
+grepping its output for the word "error". Grepping made a missing compiler
+indistinguishable from a clean parse: with no `clang++` on `PATH` there are
+no diagnostics to match, so every file reported `ok` and the script exited 0.
+It now refuses to run without a compiler instead.
+
 ## When the Orin is available
 
 ```

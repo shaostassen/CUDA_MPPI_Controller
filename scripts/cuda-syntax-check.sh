@@ -23,7 +23,21 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STUB="$ROOT/scripts/cudastub"
 ARCH="${CUDA_ARCH:-sm_87}"
 
+CLANG="${CLANGXX:-clang++}"
+
+# Fail loudly if there is no compiler to run. Without this the loop below would
+# report every file "ok" and exit 0, because a missing clang++ produces no
+# diagnostics to find — a gate that silently passes is worse than no gate, and
+# this script runs in CI.
+if ! command -v "$CLANG" >/dev/null 2>&1; then
+  echo "ERROR: '$CLANG' not found on PATH; cannot syntax-check CUDA sources." >&2
+  echo "Install clang (>= 14 parses CUDA) or set CLANGXX to its path." >&2
+  exit 2
+fi
+
 # googletest headers, if a CPU build tree exists (needed by the .cu tests).
+# Configuring is enough to populate them: FetchContent downloads at configure
+# time, so CI can run `cmake --preset cpu` without building.
 GTEST_INC="$ROOT/build/cpu/_deps/googletest-src/googletest/include"
 GTEST_FLAG=""
 [ -d "$GTEST_INC" ] && GTEST_FLAG="-I$GTEST_INC"
@@ -37,13 +51,19 @@ fi
 status=0
 for f in $FILES; do
   rel="${f#"$ROOT"/}"
-  out=$(clang++ -x cuda --cuda-device-only -nocudainc -nocudalib \
+  # Keep clang's exit status as the verdict rather than grepping its output for
+  # the word "error": the status is set by the compiler itself, so it cannot be
+  # faked by a diagnostic that happens to be worded differently, nor missed when
+  # clang fails to run at all. The greps below only tidy up what gets printed.
+  out=$("$CLANG" -x cuda --cuda-device-only -nocudainc -nocudalib \
     --cuda-gpu-arch="$ARCH" -std=c++20 -fsyntax-only \
     -include "$STUB/cuda_runtime.h" \
     -I"$STUB" -I"$ROOT/include" -I"$ROOT/examples" $GTEST_FLAG \
-    "$f" 2>&1 | grep -v "gtest-printers.h" | grep -vE "^\s*(524|\s*\|)" \
+    "$f" 2>&1)
+  rc=$?
+  out=$(printf '%s\n' "$out" | grep -v "gtest-printers.h" | grep -vE "^\s*(524|\s*\|)" \
     | grep -vE "In file included from|1 warning generated")
-  if echo "$out" | grep -q "error"; then
+  if [ "$rc" -ne 0 ]; then
     echo "FAIL  $rel"
     echo "$out" | head -20
     status=1

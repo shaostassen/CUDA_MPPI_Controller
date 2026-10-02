@@ -20,6 +20,27 @@ jobs:
       - name: Test
         run: ctest --preset cpu --output-on-failure
 
+  cuda-syntax-check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # The Orin is the only CUDA machine for this project, so nvcc never runs
+      # here. clang can still parse the .cu/.cuh sources against the stub in
+      # scripts/cudastub/, which catches ordinary authoring mistakes without an
+      # SSH round trip. A clean run means "worth pushing to the Orin", not
+      # "verified" — see docs/cuda-port.md.
+      - name: Record the compiler doing the checking
+        run: clang++ --version
+
+      # Configure only: the .cu tests include <gtest/gtest.h>, and FetchContent
+      # populates googletest at configure time, so no build is needed.
+      - name: Configure (for googletest headers)
+        run: cmake --preset cpu
+
+      - name: Syntax-check CUDA sources
+        run: scripts/cuda-syntax-check.sh
+
   format-check:
     runs-on: ubuntu-24.04
     steps:
