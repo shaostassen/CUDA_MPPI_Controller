@@ -24,10 +24,16 @@ MODEL="not detected"
 [ -f /proc/device-tree/model ] && MODEL="$(tr -d '\0' < /proc/device-tree/model)"
 L4T="not detected"
 [ -f /etc/nv_tegra_release ] && L4T="$(head -1 /etc/nv_tegra_release)"
+# Installed state, not `apt show`: that reports the repo's candidate version
+# whether or not the package is installed, which would record a JetPack that
+# is not on the machine.
 JETPACK="not detected"
-if have apt; then
-  JETPACK="$(apt show nvidia-jetpack 2>/dev/null | awk -F': ' '/^Version:/{print $2; exit}')"
-  [ -z "$JETPACK" ] && JETPACK="not detected"
+if have dpkg-query; then
+  JETPACK="nvidia-jetpack meta-package not installed (components may be installed individually)"
+  JP_STATE="$(dpkg-query -W -f='${db:Status-Status} ${Version}' nvidia-jetpack 2>/dev/null)"
+  case "$JP_STATE" in
+    "installed "*) JETPACK="${JP_STATE#installed }" ;;
+  esac
 fi
 OSREL="$( (grep PRETTY_NAME /etc/os-release 2>/dev/null || echo '') | cut -d'"' -f2)"
 [ -z "$OSREL" ] && OSREL="$(uname -sr)"
