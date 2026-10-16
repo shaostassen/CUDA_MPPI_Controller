@@ -11,8 +11,8 @@
 
 namespace {
 
-using OmpController = mppi::Controller<cartpole_task::Plant, cartpole_task::SwingUpCost, 1,
-                                       mppi::exec::OpenMp>;
+using OmpController =
+    mppi::Controller<cartpole_task::Plant, cartpole_task::SwingUpCost, 1, mppi::exec::OpenMp>;
 
 }  // namespace
 

@@ -1,3 +1,5 @@
+#include "mppi/noise_source.hpp"
+
 #include <gtest/gtest.h>
 
 #include <array>
@@ -5,7 +7,6 @@
 #include <vector>
 
 #include "cartpole_task.hpp"
-#include "mppi/noise_source.hpp"
 
 // S2.5 asks for results bit-identical to the stored-noise path when epsilon
 // is regenerated from Philox counters instead of kept in memory. That claim
@@ -121,12 +122,12 @@ TEST(NoiseSource, SkippingNoiseStoresLeavesCostsUnchanged) {
 
   std::vector<float> noise(static_cast<std::size_t>(cfg.samples) * cfg.horizon, 0.0f);
   for (int k = 0; k < cfg.samples; ++k) {
-    float with_store = mppi::rollout_and_cost<cartpole_task::Plant, cartpole_task::SwingUpCost, 1,
-                                              true>(plant, cost, x, u_nominal.data(), params, k,
-                                                    noise.data());
-    float without = mppi::rollout_and_cost<cartpole_task::Plant, cartpole_task::SwingUpCost, 1,
-                                           false>(plant, cost, x, u_nominal.data(), params, k,
-                                                  nullptr);
+    float with_store =
+        mppi::rollout_and_cost<cartpole_task::Plant, cartpole_task::SwingUpCost, 1, true>(
+            plant, cost, x, u_nominal.data(), params, k, noise.data());
+    float without =
+        mppi::rollout_and_cost<cartpole_task::Plant, cartpole_task::SwingUpCost, 1, false>(
+            plant, cost, x, u_nominal.data(), params, k, nullptr);
     ASSERT_EQ(with_store, without) << "k=" << k;
   }
 }

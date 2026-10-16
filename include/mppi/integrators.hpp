@@ -6,18 +6,16 @@ namespace mppi::integrators {
 
 template <typename System, typename Control>
 MPPI_HOST_DEVICE typename System::State euler_step(const System& sys,
-                                                     const typename System::State& s,
-                                                     const Control& u,
-                                                     typename System::ScalarType dt) {
+                                                   const typename System::State& s,
+                                                   const Control& u,
+                                                   typename System::ScalarType dt) {
   typename System::State ds = sys.derivative(s, u);
   return s + ds * dt;
 }
 
 template <typename System, typename Control>
-MPPI_HOST_DEVICE typename System::State rk4_step(const System& sys,
-                                                   const typename System::State& s,
-                                                   const Control& u,
-                                                   typename System::ScalarType dt) {
+MPPI_HOST_DEVICE typename System::State rk4_step(const System& sys, const typename System::State& s,
+                                                 const Control& u, typename System::ScalarType dt) {
   using Scalar = typename System::ScalarType;
   typename System::State k1 = sys.derivative(s, u);
   typename System::State k2 = sys.derivative(s + k1 * (dt * Scalar(0.5)), u);

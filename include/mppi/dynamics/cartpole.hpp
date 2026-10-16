@@ -21,8 +21,8 @@ struct CartPole {
   Scalar pole_mass = Scalar(0.1);
   Scalar pole_length = Scalar(0.5);  // pivot to point mass
   Scalar gravity = Scalar(9.81);
-  Scalar cart_damping = Scalar(0);   // viscous damping on the cart
-  Scalar pole_damping = Scalar(0);   // viscous damping at the pole pivot
+  Scalar cart_damping = Scalar(0);  // viscous damping on the cart
+  Scalar pole_damping = Scalar(0);  // viscous damping at the pole pivot
 
   struct State {
     Scalar x;
@@ -51,11 +51,10 @@ struct CartPole {
     Scalar denom = M + m * sin_t * sin_t;
 
     Scalar x_ddot = (force - cart_damping * s.x_dot + m * l * sin_t * s.theta_dot * s.theta_dot -
-                      m * g * sin_t * cos_t + (pole_damping * s.theta_dot * cos_t) / l) /
-                     denom;
+                     m * g * sin_t * cos_t + (pole_damping * s.theta_dot * cos_t) / l) /
+                    denom;
 
-    Scalar theta_ddot =
-        (g * sin_t - cos_t * x_ddot - pole_damping * s.theta_dot / (m * l)) / l;
+    Scalar theta_ddot = (g * sin_t - cos_t * x_ddot - pole_damping * s.theta_dot / (m * l)) / l;
 
     return State{s.x_dot, x_ddot, s.theta_dot, theta_ddot};
   }

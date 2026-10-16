@@ -69,7 +69,7 @@ TEST(BenchConfig, ParsesAndAppliesDefaults) {
   EXPECT_EQ(c.name, "t");
   EXPECT_EQ(c.samples, 2048);
   EXPECT_EQ(c.horizon, 25);
-  EXPECT_EQ(c.warmup, 50);   // §4 protocol defaults
+  EXPECT_EQ(c.warmup, 50);  // §4 protocol defaults
   EXPECT_EQ(c.measure, 500);
   EXPECT_DOUBLE_EQ(c.dt, 0.02);
 }

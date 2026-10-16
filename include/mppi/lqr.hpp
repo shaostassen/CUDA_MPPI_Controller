@@ -27,14 +27,11 @@ struct LinearSystem {
 // theta_dot^2 -> 0:
 //   x_ddot     = (F - m g theta) / M
 //   theta_ddot = (g theta - x_ddot) / l
-inline LinearSystem linearize_cartpole_euler(double cart_mass, double pole_mass,
-                                             double pole_length, double gravity, double dt) {
+inline LinearSystem linearize_cartpole_euler(double cart_mass, double pole_mass, double pole_length,
+                                             double gravity, double dt) {
   const double M = cart_mass, m = pole_mass, l = pole_length, g = gravity;
 
-  Mat4 a_c{{{0, 1, 0, 0},
-            {0, 0, -m * g / M, 0},
-            {0, 0, 0, 1},
-            {0, 0, (M + m) * g / (M * l), 0}}};
+  Mat4 a_c{{{0, 1, 0, 0}, {0, 0, -m * g / M, 0}, {0, 0, 0, 1}, {0, 0, (M + m) * g / (M * l), 0}}};
   Vec4 b_c{0, 1.0 / M, 0, -1.0 / (M * l)};
 
   LinearSystem sys;
@@ -128,8 +125,8 @@ inline Vec4 gain_from_p(const Mat4& p, const LinearSystem& sys, double r) {
 }  // namespace detail
 
 // Infinite-horizon gain: iterate the Riccati step to a fixed point.
-inline Vec4 dare_gain(const LinearSystem& sys, const Vec4& q_diag, double r,
-                      int max_iter = 100000, double tol = 1e-11) {
+inline Vec4 dare_gain(const LinearSystem& sys, const Vec4& q_diag, double r, int max_iter = 100000,
+                      double tol = 1e-11) {
   Mat4 p{};
   for (int i = 0; i < 4; ++i) {
     p[i][i] = q_diag[i];
@@ -147,8 +144,8 @@ inline Vec4 dare_gain(const LinearSystem& sys, const Vec4& q_diag, double r,
 // This is the problem MPPI with horizon T and terminal cost w_term is
 // actually approximating, so it is the fair cross-check target; dare_gain
 // differs from it exactly by the light-terminal/finite-horizon effect.
-inline Vec4 finite_horizon_gain(const LinearSystem& sys, const Vec4& q_diag,
-                                const Vec4& q_terminal, double r, int horizon) {
+inline Vec4 finite_horizon_gain(const LinearSystem& sys, const Vec4& q_diag, const Vec4& q_terminal,
+                                double r, int horizon) {
   Mat4 p{};
   for (int i = 0; i < 4; ++i) {
     p[i][i] = q_terminal[i];

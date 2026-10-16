@@ -29,8 +29,8 @@ MPPI_HOST_DEVICE Scalar coupling_gamma(Scalar lambda, Scalar alpha) {
 // gamma * u^T Sigma^-1 eps, where sigma_sq[i] is the sampling variance of
 // control dim i. Added to the running cost of every rollout timestep.
 template <typename Scalar, std::size_t M>
-MPPI_HOST_DEVICE Scalar control_coupling(Scalar gamma, const Scalar (&u)[M],
-                                         const Scalar (&eps)[M], const Scalar (&sigma_sq)[M]) {
+MPPI_HOST_DEVICE Scalar control_coupling(Scalar gamma, const Scalar (&u)[M], const Scalar (&eps)[M],
+                                         const Scalar (&sigma_sq)[M]) {
   Scalar c = Scalar(0);
   for (std::size_t i = 0; i < M; ++i) {
     c += u[i] * eps[i] / sigma_sq[i];

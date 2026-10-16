@@ -118,8 +118,8 @@ TEST(NoiseLayout, SgemvFormulationMatchesReferenceWeightedSum) {
   for (int k = 0; k < K; ++k) {
     for (int t = 0; t < T; ++t) {
       for (int i = 0; i < M; ++i) {
-        noise[layout.index(k, t, i)] = 0.01f * static_cast<float>(k) +
-                                        0.1f * static_cast<float>(t) - static_cast<float>(i);
+        noise[layout.index(k, t, i)] =
+            0.01f * static_cast<float>(k) + 0.1f * static_cast<float>(t) - static_cast<float>(i);
       }
     }
   }

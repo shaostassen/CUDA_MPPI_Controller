@@ -20,7 +20,9 @@ using mppi::dynamics::CartPole;
 using SwingUpCost = cartpole_task::SwingUpCost;
 using SwingUpController = cartpole_task::Controller;
 
-SwingUpController::Config test_config(unsigned seed) { return cartpole_task::config(seed); }
+SwingUpController::Config test_config(unsigned seed) {
+  return cartpole_task::config(seed);
+}
 
 // Closed loop: MPPI plans with Euler rollouts (PLAN.md §1 decision 5), the
 // environment integrates the same model with RK4. Success per the AC:
@@ -63,12 +65,11 @@ TEST(MppiCartPole, SwingUpSucceedsAcrossSeeds) {
       failures.push_back(seed);
     }
   }
-  EXPECT_GE(successes, 95) << "failed seeds:"
-                           << [&] {
-                                std::string s;
-                                for (unsigned f : failures) s += " " + std::to_string(f);
-                                return s;
-                              }();
+  EXPECT_GE(successes, 95) << "failed seeds:" << [&] {
+    std::string s;
+    for (unsigned f : failures) s += " " + std::to_string(f);
+    return s;
+  }();
   RecordProperty("successes", successes);
 }
 
