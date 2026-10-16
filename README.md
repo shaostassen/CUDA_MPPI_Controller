@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/shaostassen/CUDA_MPPI_Controller/actions/workflows/ci.yml/badge.svg)](https://github.com/shaostassen/CUDA_MPPI_Controller/actions/workflows/ci.yml)
 
-GPU-accelerated Model Predictive Path Integral (MPPI) controller written in CUDA, targeting NVIDIA Jetson Orin (sm_87); developed on a Jetson AGX Orin. See [PLAN.md](PLAN.md) for the full backlog.
+GPU-accelerated Model Predictive Path Integral (MPPI) controller written in CUDA, targeting NVIDIA Jetson Orin (sm_87); developed on a Jetson AGX Orin 64 GB. See [PLAN.md](PLAN.md) for the full backlog.
 
 ![cartpole swing-up under MPPI](docs/media/cartpole_swingup.gif)
 

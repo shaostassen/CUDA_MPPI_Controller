@@ -1,5 +1,13 @@
 # Jetson Orin Nano bring-up (S0.1, prerequisite)
 
+> **Scope note (2026-10-15):** this guide was written for the Orin Nano
+> Developer Kit. The project's board is now a Jetson AGX Orin 64 GB, and the
+> Nano-specific steps below (microSD target, USB-stick installer, QSPI firmware
+> updater) have not been checked against it. Follow NVIDIA's AGX Orin
+> developer kit guide for the install, then continue at
+> `scripts/jetson-setup-check.sh`, which checks for compute capability 8.7 and
+> works on either board.
+
 Bringing a factory-fresh Orin Nano Developer Kit to the point where
 `scripts/jetson-setup-check.sh` can run. Written against NVIDIA's current
 documentation (checked 2026-09-12); the install flow changed since PLAN.md

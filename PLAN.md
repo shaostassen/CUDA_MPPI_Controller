@@ -1,6 +1,6 @@
 # cuda_mppi_controller — GPU-Accelerated MPPI Controller: Plan & Backlog
 
-**Owner:** Shao · **Window:** ~9 weeks @ 5–8 h/wk (~60–70 h total) · **Hardware:** Jetson Orin Nano (sm_87, JetPack 7.2 / CUDA 13) — sole CUDA machine; Mac edits over SSH, no local CUDA · **Stretch target:** desktop-GPU comparison column if lab hardware materializes
+**Owner:** Shao · **Window:** ~9 weeks @ 5–8 h/wk (~60–70 h total) · **Hardware:** Jetson AGX Orin 64 GB (sm_87, 12× A78AE, 64 GB shared LPDDR5; JetPack 7.2 / CUDA 13 as pinned in §1) — sole CUDA machine; Mac edits over SSH, no local CUDA · **Stretch target:** desktop-GPU comparison column if lab hardware materializes
 
 **What this project proves:** raw CUDA kernel design + profiling fluency on real embedded hardware, sitting directly on existing control-theory and parallel-computing strengths. Headline artifact: a quadrotor flying a figure-8 under closed-loop MPPI at 100 Hz on a ~15 W board, evaluating 10,000+ sampled futures per control step, backed by an honest speedup table against CPU, OpenMP, and PyTorch (including `torch.compile`) baselines measured on the same SoC — a perf-per-watt story a desktop build can't tell.
 
@@ -10,7 +10,9 @@
 
 Stated up front so every story below inherits them. Change any of these and the backlog still holds — only parameters shift.
 
-1. **OS / dev flow:** JetPack 7.2 (L4T r39.x) on the Orin Nano; MAXN power mode + fan profile set once and recorded. The Mac cannot build CUDA — edit locally, build/test/profile on the Orin over SSH-on-USB (`192.168.55.1`). Phase A's CPU reference also builds natively on the Mac for fast iteration, but every recorded number comes from the Orin. Bring-up procedure: `docs/jetson-bringup.md`.
+1. **OS / dev flow:** JetPack 7.2 (L4T r39.x) on the Jetson AGX Orin 64 GB; MAXN power mode + fan profile set once and recorded. The Mac cannot build CUDA — edit locally, build/test/profile on the Orin over SSH-on-USB (`192.168.55.1`). Phase A's CPU reference also builds natively on the Mac for fast iteration, but every recorded number comes from the Orin. Bring-up procedure: `docs/jetson-bringup.md` (written for the Orin Nano; see its scope note).
+
+   *Revised 2026-10-15 (was Jetson Orin Nano 8 GB).* The board is an AGX Orin 64 GB: 12 CPU cores instead of 6, 64 GB instead of 8 GB, 204.8 GB/s instead of ~68 GB/s, 15–60 W power modes. Same sm_87, so kernels and build presets are unchanged; the CPU baselines and the power story are what move. Not yet re-decided: the "15 W" framing in the headline, §4 and §7, and whether MAXN is the only power mode recorded.
 2. **Toolchain:** JetPack 7.2's CUDA 13, L4T's GCC, C++20, CMake ≥ 3.28 with presets. Build targets `sm_87` real + `compute_87` PTX; a desktop arch gets added only if the stretch column happens.
 
    *Revised 2026-09-12 (was "JetPack ≥ 6.2 / CUDA 12.6").* JetPack 7.2 is what NVIDIA's current Orin Nano installer ships, so targeting 6.2 would mean fighting the supported path for no benefit to the kernels. Two consequences worth carrying: CUDA 13 **removed** `cudaDeviceProp::clockRate` and `memoryClockRate` (use `cudaDeviceGetAttribute`), and the aarch64 PyTorch wheels for CUDA 13 are less trodden than the 12.6 ones — which is a risk to the E3 baselines only, already covered by §8's N/A-with-reason fallback.
@@ -21,7 +23,7 @@ Stated up front so every story below inherits them. Change any of these and the 
 7. **Kernel v1 design:** 1 thread = 1 rollout, fused rollout + cost accumulation in one kernel, noise read from global memory. Simple, correct, profilable. Cleverness comes later, measured.
 8. **Reductions v1:** min via CUB `DeviceReduce`, softmax-normalize in a small kernel, weighted noise sum via cuBLAS `Sgemv` (noise viewed as a K × (T·m) matrix). v2 replaces these with hand-rolled warp-shuffle reductions behind a flag; whichever measures faster becomes default. Both paths stay in-repo — the comparison is writeup content.
 9. **Noise layout:** `[T][K][m]` so that at fixed t, adjacent threads (k) read adjacent memory — coalesced for m = 1–4.
-10. **Baselines:** CPU single-thread and CPU OpenMP on the Orin's 6× Cortex-A78AE (same-SoC comparison — the honest one), PyTorch eager, `torch.compile(mode="reduce-overhead")` (CUDA graphs — the *fair* GPU baseline), and the UM-ARM-Lab `pytorch_mppi` library at a pinned commit. PyTorch on Jetson means NVIDIA's aarch64 JetPack wheels, not PyPI — pin the wheel in week 1 and smoke-test `torch.compile` immediately (see §8).
+10. **Baselines:** CPU single-thread and CPU OpenMP on the Orin's 12× Cortex-A78AE (same-SoC comparison — the honest one), PyTorch eager, `torch.compile(mode="reduce-overhead")` (CUDA graphs — the *fair* GPU baseline), and the UM-ARM-Lab `pytorch_mppi` library at a pinned commit. PyTorch on Jetson means NVIDIA's aarch64 JetPack wheels, not PyPI — pin the wheel in week 1 and smoke-test `torch.compile` immediately (see §8).
 11. **Phase C dynamics: quadrotor** (over off-road vehicle). 13-state (pos, vel, quaternion, body rates), 4 rotor-thrust inputs, standard rigid-body + thrust mixing. Reasons: crisper success metrics, underactuated attitude dynamics stress-test the sampler, and it reads better for aerial/legged autonomy audiences.
 12. **Visualization:** rerun for 3D scenes and sampled-trajectory "ghost trails" — log `.rrd` on the Orin, view on the Mac; matplotlib for benchmark plots. The ghost-trail figure-8 render is the hero GIF.
 13. **Repo hygiene:** MIT license, results committed as CSV + generated plots, every benchmark claim reproducible by one script.
@@ -61,7 +63,7 @@ Stories sized ~2–5 h. AC = acceptance criteria; a story is done only when its 
 - **S1.3 Cost library + MPPI math.** Quadratic running/terminal costs, control-coupling term, baseline-subtracted softmax weights. AC: unit test reproduces a hand-computed 3-sample weight example exactly.
 - **S1.4 MPPI core (CPU, single-thread).** AC: cartpole swing-up from hanging start succeeds in ≥ 95/100 seeded runs (|θ| < 0.1 rad and |x| < 0.5 m within 5 s, held 1 s) at K = 512, T = 50; runs ≥ 100 Hz single-thread.
 - **S1.5 LQR cross-check.** Near upright equilibrium with quadratic costs, MPPI mean control ≈ LQR gain response. AC: comparison plot committed with tolerance stated; deviations explained.
-- **S1.6 OpenMP path.** Parallel rollouts + reduction. AC: ≥ 4× vs single-thread at K = 16k, T = 50 on the Orin's 6 A78AE cores; control update matches 1T within 1e-4 rel (summation-order tolerance); `OMP_NUM_THREADS` and pinning documented.
+- **S1.6 OpenMP path.** Parallel rollouts + reduction. AC: ≥ 4× vs single-thread at K = 16k, T = 50 on the Orin's 12 A78AE cores; control update matches 1T within 1e-4 rel (summation-order tolerance); `OMP_NUM_THREADS` and pinning documented.
 - **S1.7 Viz.** rerun logging of cartpole state + sampled-trajectory subsample. AC: 10-second swing-up clip exported — this is the M1 video.
 
 ### E2 — CUDA port, Phase B core (~14 h)
@@ -112,7 +114,7 @@ Stories sized ~2–5 h. AC = acceptance criteria; a story is done only when its 
 
 ### Table 1 — Iteration latency (mean ms / p99 ms)
 
-| K | T | CPU 1T | CPU OMP-6 | Torch eager | Torch compile | CUDA v1 | CUDA final | × vs CPU-1T | × vs compile |
+| K | T | CPU 1T | CPU OMP-12 | Torch eager | Torch compile | CUDA v1 | CUDA final | × vs CPU-1T | × vs compile |
 |---|---|---|---|---|---|---|---|---|---|
 | 1k | 50 | | | | | | | | |
 | 4k | 50 | | | | | | | | |
@@ -210,7 +212,7 @@ Working title: **"10,000 futures, 100 times a second, on 15 watts: MPPI in raw C
 - **`torch.compile` on JetPack:** Inductor + CUDA-graphs support in the aarch64 Jetson wheels is the flakiest link — smoke-test in week 1; if broken, the compile column becomes N/A-with-reason and eager stays mandatory.
 - **`torch.compile` is a strong baseline:** if the raw-CUDA margin is thin at large K, the narrative pivots to small-K latency and closed-loop Hz (where fusion + graphs dominate). Decided in S3.6, not discovered in the writeup.
 - **Quadrotor cost tuning is a time sink:** timebox 4 h; M4 falls back to hover-recovery + waypoint if figure-8 tuning drags, with figure-8 finishing inside the stretch window.
-- **Remote-only GPU loop:** every build/test cycle crosses SSH — set up Remote-SSH/rsync properly in S0.1 or the iteration tax eats the schedule. Watch thermals and the 8 GB shared CPU/GPU memory during torch baselines and K = 100k configs.
+- **Remote-only GPU loop:** every build/test cycle crosses SSH — set up Remote-SSH/rsync properly in S0.1 or the iteration tax eats the schedule. Watch thermals during torch baselines and K = 100k configs; the 64 GB shared CPU/GPU memory makes capacity a non-issue.
 - **RNG correctness:** Philox known-answer tests in S1.2 before anything depends on it.
 
 **Definition of done:** M1–M4 shipped; README with hero GIF and 3-command quickstart; writeup live on shaostassen.com; every number in Tables 1–4 regenerable by a committed script.

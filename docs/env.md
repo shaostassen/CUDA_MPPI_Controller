@@ -1,4 +1,4 @@
-# Environment (Jetson Orin Nano)
+# Environment (Jetson AGX Orin 64 GB)
 
 Filled in during S0.1 (toolchain verification). Every number below should
 come from a command actually run on the Orin — no placeholders left in once

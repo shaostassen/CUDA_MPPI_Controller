@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(ENABLE_CUDA "Build CUDA kernels (requires nvcc; targets Jetson Orin Nano sm_87)" OFF)
+option(ENABLE_CUDA "Build CUDA kernels (requires nvcc; targets Jetson Orin sm_87)" OFF)
 
 if(ENABLE_CUDA)
   include(CheckLanguage)

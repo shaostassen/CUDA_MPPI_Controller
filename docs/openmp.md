@@ -21,10 +21,10 @@ everything else builds as before.
 
 ## Measuring (AC benchmark point: K = 16k, T = 50)
 
-On the Orin (the recorded number — 6 homogeneous Cortex-A78AE cores):
+On the Orin (the recorded number — AGX Orin 64 GB, 12 homogeneous Cortex-A78AE cores):
 
 ```
-OMP_NUM_THREADS=6 OMP_PROC_BIND=close OMP_PLACES=cores ./build/cpu/examples/omp_bench
+OMP_NUM_THREADS=12 OMP_PROC_BIND=close OMP_PLACES=cores ./build/cpu/examples/omp_bench
 ```
 
 `OMP_PROC_BIND=close OMP_PLACES=cores` pins one thread per physical core and
@@ -33,7 +33,7 @@ for the mean. AC target: >= 4x vs single-thread.
 
 | Machine | Threads | Serial ms | OpenMP ms | Speedup |
 |---|---|---|---|---|
-| Orin Nano (AC number) | 6 | _pending S0.1 hardware session_ | | |
+| AGX Orin 64 GB (AC number) | 12 | _pending first hardware run_ | | |
 | M-series Mac (dev only) | 8 | 27.36 | 6.56 | 4.16x |
 
 ### Scaling measured on the dev Mac (4 performance + 4 efficiency cores)
@@ -52,15 +52,16 @@ of those threads land on efficiency cores and the whole parallel region
 waits on them. At 8 threads each chunk is smaller (K/8), so the straggler
 costs less in absolute terms and throughput recovers.
 
-The Orin's six A78AE cores are homogeneous, so this straggler effect should
-not appear there and `schedule(static)` is the right choice. Extrapolating
-the ~90-95% per-core efficiency measured on the Mac's performance cores,
-6 homogeneous cores project to roughly 5x — above the AC's 4x, but that is
-a projection from different silicon, not a result. The recorded number
-comes from the Orin.
+The Orin's twelve A78AE cores are homogeneous, so this straggler effect should
+not appear there and `schedule(static)` is the right choice. An earlier
+projection of ~5x was for the six-core Orin Nano and is withdrawn: nothing
+here predicts twelve cores on different silicon. With twelve cores the AC's 4x
+is a low bar, so the number to record is the scaling curve (1, 2, 4, 6, 8, 12
+threads) rather than a single point. The recorded numbers come from the Orin.
 
 The workload is compute-bound rather than bandwidth-bound (K*T*M noise
 floats = 3.2 MB written and read per iteration, ~240 MB/s at the serial
-rate, against the Orin's ~68 GB/s shared budget), and the per-step cost is
-dominated by the `sin`/`cos` in the cartpole derivative. That is the regime
-where core scaling holds up, which is the basis for the projection above.
+rate, against the AGX Orin 64 GB's 204.8 GB/s shared budget), and the per-step
+cost is dominated by the `sin`/`cos` in the cartpole derivative. That is the
+regime where core scaling is expected to hold up, but it is unmeasured on the
+Orin.
